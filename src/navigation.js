@@ -96,6 +96,7 @@ export function createNavigator(map, hooks = {}) {
   // screen the panels leave clear. Rather than deriving screen offsets by hand (easy to get the
   // sign wrong), we frame with a trial camera, measure where the route actually lands in pixels,
   // and correct. Two passes converge well within a pixel or two.
+  let lastFraming = null;                        // recorded for debugState(), so framing is inspectable
   function frameRoute() {
     const { points } = state;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -169,6 +170,12 @@ export function createNavigator(map, hooks = {}) {
       target.addScaledVector(up, dyPx * worldPerPixel);
     }
     place();
+    const final = screenBox();
+    lastFraming = {
+      insets, clear: { ...clear },
+      routeOnScreen: { x0: Math.round(final.sx0), x1: Math.round(final.sx1), y0: Math.round(final.sy0), y1: Math.round(final.sy1) },
+      dist: Math.round(dist),
+    };
     return { target, position: cam.position.clone() };
   }
 
@@ -328,7 +335,7 @@ export function createNavigator(map, hooks = {}) {
         bird: { x: walker.position.x, z: walker.position.z, yaw: walker.rotation.y },
         pathHeading: pos.heading,
         cameraTarget: { x: controls.target.x, z: controls.target.z },
-        following: follow, centering: !!camTween, view,
+        following: follow, centering: !!camTween, view, framing: lastFraming,
       };
     },
 
