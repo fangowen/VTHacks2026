@@ -1,7 +1,7 @@
 {
-  "name": "the-hokie-table-server",
+  "name": "where-the-hokie-am-i-server",
   "version": "1.0.0",
-  "description": "Backend for The Hokie Table: Gemini tool-driven replies spoken by ElevenLabs.",
+  "description": "Backend for Where the Hokie Am I?: Gemini tool-driven replies spoken by ElevenLabs.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

@@ -300,6 +300,7 @@ export function createUI(ctl) {
     panelBody.append(el("p", { class: "hk-note", "data-i18n": "weekIntro" }));
     for (const day of ctl.itinerary()) {
       panelBody.append(el("h3", { class: "hk-day", text: t(`day${day.day}`) }));
+      if (!day.items.length) panelBody.append(el("p", { class: "hk-note", "data-i18n": "it_noClasses" }));
       for (const item of day.items) {
         const place = item.placeId ? ctl.places.byId(item.placeId) : null;
         panelBody.append(el("button", { type: "button", class: "hk-item", onclick: () => place && ctl.selectPlace(place) },
