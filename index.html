@@ -85,6 +85,7 @@ document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(COLORS.room);
+scene.fog = new THREE.Fog(COLORS.room, 7600, 12500);
 
 // Narrow FOV + far camera = flatter perspective, which reads as "looking at a model"
 const camera = new THREE.PerspectiveCamera(22, innerWidth / innerHeight, 10, 30000);
@@ -112,18 +113,221 @@ sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.6;
 scene.add(sun);
 
-// ---------- Board (the diorama slab) ----------
+// ---------- Physical war table + clubhouse room ----------
+// Procedural materials keep the room self-contained/offline while adding enough irregularity
+// that the large wood surfaces do not read as flat brown boxes.
+function seededRandom(seed = 1) {
+  let n = seed >>> 0;
+  return () => ((n = Math.imul(n ^ n >>> 15, 1 | n), n ^= n + Math.imul(n ^ n >>> 7, 61 | n), ((n ^ n >>> 14) >>> 0) / 4294967296));
+}
+function woodTexture(base, grain, { planks = 0, repeatX = 1, repeatY = 1, seed = 7 } = {}) {
+  const canvas = document.createElement("canvas"); canvas.width = 512; canvas.height = 512;
+  const ctx = canvas.getContext("2d"), rand = seededRandom(seed);
+  ctx.fillStyle = base; ctx.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 260; i++) {
+    const y = rand() * 512, amp = 2 + rand() * 7, phase = rand() * Math.PI * 2;
+    ctx.beginPath();
+    for (let x = -8; x <= 520; x += 12) {
+      const yy = y + Math.sin(x * (0.012 + rand() * 0.004) + phase) * amp;
+      if (x < 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+    }
+    ctx.strokeStyle = grain; ctx.globalAlpha = 0.035 + rand() * 0.11; ctx.lineWidth = 0.5 + rand() * 2; ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  if (planks > 0) {
+    const h = 512 / planks;
+    for (let i = 1; i < planks; i++) {
+      ctx.fillStyle = "rgba(20,10,5,.42)"; ctx.fillRect(0, Math.round(i * h), 512, 2);
+      ctx.fillStyle = "rgba(255,220,170,.08)"; ctx.fillRect(0, Math.round(i * h) + 2, 512, 1);
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(repeatX, repeatY);
+  texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  return texture;
+}
+
+const darkWood = new THREE.MeshStandardMaterial({
+  map: woodTexture("#4c2f20", "#1f100a", { repeatX: 2, repeatY: 2, seed: 11 }),
+  color: 0xffffff, roughness: 0.62, metalness: 0,
+});
+const trimWood = new THREE.MeshStandardMaterial({
+  map: woodTexture("#2d1b14", "#0f0805", { seed: 21 }), color: 0xffffff, roughness: 0.7,
+});
+const floorWood = new THREE.MeshStandardMaterial({
+  map: woodTexture("#7c573b", "#372217", { planks: 12, repeatX: 7, repeatY: 7, seed: 3 }),
+  color: 0xffffff, roughness: 0.82,
+});
+const brassMat = new THREE.MeshStandardMaterial({ color: 0xc9a45c, roughness: 0.34, metalness: 0.62 });
+
+function roomBox(w, h, d, material, x, y, z, { cast = true, receive = true } = {}) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+  mesh.position.set(x, y, z); mesh.castShadow = cast; mesh.receiveShadow = receive; scene.add(mesh); return mesh;
+}
+function canvasArt(width, height, draw) {
+  const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
+  const ctx = canvas.getContext("2d"); draw(ctx, width, height);
+  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy()); return texture;
+}
+function fittedText(ctx, text, maxWidth, startSize, family = "Impact, sans-serif") {
+  let size = startSize;
+  do { ctx.font = `800 ${size}px ${family}`; size -= 2; } while (size > 18 && ctx.measureText(text).width > maxWidth);
+  return size + 2;
+}
+function wallFrame(x, y, w, h, texture, { z = -3150, frame = trimWood } = {}) {
+  roomBox(w + 54, h + 54, 34, frame, x, y, z, { cast: true, receive: false });
+  const art = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: texture, roughness: 0.72, transparent: true }));
+  art.position.set(x, y, z + 19); art.castShadow = false; scene.add(art); return art;
+}
+function signTexture(title, subtitle, base = "#861f41", accent = "#e5751f") {
+  return canvasArt(900, 420, (ctx, w, h) => {
+    ctx.fillStyle = base; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = accent; ctx.fillRect(0, 0, w, 34); ctx.fillRect(0, h - 34, w, 34);
+    ctx.strokeStyle = "#f5eddb"; ctx.lineWidth = 8; ctx.strokeRect(42, 54, w - 84, h - 108);
+    ctx.fillStyle = "#fff8eb"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const size = fittedText(ctx, title, w - 110, 112); ctx.font = `800 ${size}px Impact, sans-serif`;
+    ctx.fillText(title, w / 2, h * 0.43);
+    ctx.fillStyle = accent; ctx.font = "700 42px Georgia, serif"; ctx.fillText(subtitle, w / 2, h * 0.72);
+  });
+}
+function jerseyTexture(number, label, body = "#861f41", accent = "#e5751f") {
+  return canvasArt(520, 650, (ctx, w, h) => {
+    ctx.fillStyle = "#e8dfcc"; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "#d4cab8"; for (let i = 0; i < 10; i++) ctx.fillRect(0, i * 70, w, 2);
+    ctx.fillStyle = body; ctx.beginPath();
+    ctx.moveTo(150, 105); ctx.lineTo(78, 175); ctx.lineTo(132, 278); ctx.lineTo(172, 248);
+    ctx.lineTo(172, 540); ctx.lineTo(348, 540); ctx.lineTo(348, 248); ctx.lineTo(388, 278);
+    ctx.lineTo(442, 175); ctx.lineTo(370, 105); ctx.lineTo(315, 132); ctx.quadraticCurveTo(260, 190, 205, 132); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = accent; ctx.lineWidth = 18; ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.font = "800 152px Impact, sans-serif"; ctx.fillText(number, 260, 410);
+    ctx.fillStyle = "#3a2318"; ctx.font = "700 38px Georgia, serif"; ctx.fillText(label, 260, 602);
+  });
+}
+function pennantTexture(text, base, accent) {
+  return canvasArt(640, 240, (ctx, w, h) => {
+    ctx.clearRect(0, 0, w, h); ctx.fillStyle = base; ctx.beginPath();
+    ctx.moveTo(10, 12); ctx.lineTo(w - 10, h / 2); ctx.lineTo(10, h - 12); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = accent; ctx.lineWidth = 18; ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.font = `800 ${fittedText(ctx, text, w * .62, 92)}px Impact, sans-serif`; ctx.fillText(text, 52, h / 2);
+  });
+}
+
+function buildWarRoom() {
+  const FLOOR_Y = -850, ROOM_W = 7200, ROOM_D = 6500, WALL_H = 4300, CEILING_Y = FLOOR_Y + WALL_H;
+  const sideWallFrame = (side, z, y, w, h, texture) => {
+    const frameX = side * (ROOM_W / 2 - 18);
+    roomBox(34, h + 54, w + 54, trimWood, frameX, y, z, { cast: true, receive: false });
+    const art = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: texture, roughness: .72 }));
+    art.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+    art.position.set(frameX - side * 19, y, z); scene.add(art);
+  };
+
+  // Floor and a restrained game-room rug establish the table's contact plane.
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), floorWood);
+  floor.rotation.x = -Math.PI / 2; floor.position.y = FLOOR_Y; floor.receiveShadow = true; scene.add(floor);
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(2850, 2850), new THREE.MeshStandardMaterial({ color: 0x5c1831, roughness: 1 }));
+  rug.rotation.x = -Math.PI / 2; rug.position.y = FLOOR_Y + 3; rug.receiveShadow = true; scene.add(rug);
+  const rugInset = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(2660, 3, 2660)),
+    new THREE.LineBasicMaterial({ color: 0xe5751f, transparent: true, opacity: 0.82 }));
+  rugInset.position.y = FLOOR_Y + 7; scene.add(rugInset);
+
+  // Single-sided planes form a complete-looking room from inside but do not trap the orbit camera
+  // if a user zooms beyond a wall.
+  const plaster = new THREE.MeshStandardMaterial({ color: 0xb7aa94, roughness: 0.96, side: THREE.FrontSide });
+  const wainscot = new THREE.MeshStandardMaterial({ color: 0x3c2920, roughness: 0.85, side: THREE.FrontSide });
+  const backWall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, WALL_H), plaster);
+  backWall.position.set(0, FLOOR_Y + WALL_H / 2, -ROOM_D / 2); backWall.receiveShadow = true; scene.add(backWall);
+  const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_D, WALL_H), plaster);
+  leftWall.rotation.y = Math.PI / 2; leftWall.position.set(-ROOM_W / 2, FLOOR_Y + WALL_H / 2, 0); leftWall.receiveShadow = true; scene.add(leftWall);
+  const rightWall = leftWall.clone(); rightWall.rotation.y = -Math.PI / 2; rightWall.position.x = ROOM_W / 2; scene.add(rightWall);
+  for (const [x, z, ry, w] of [[0, -ROOM_D / 2 + 3, 0, ROOM_W], [-ROOM_W / 2 + 3, 0, Math.PI / 2, ROOM_D], [ROOM_W / 2 - 3, 0, -Math.PI / 2, ROOM_D]]) {
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, 1150), wainscot);
+    panel.rotation.y = ry; panel.position.set(x, FLOOR_Y + 575, z); panel.receiveShadow = true; scene.add(panel);
+  }
+  roomBox(ROOM_W, 76, 62, trimWood, 0, FLOOR_Y + 55, -ROOM_D / 2 + 35);
+  roomBox(ROOM_W, 54, 45, trimWood, 0, FLOOR_Y + 1150, -ROOM_D / 2 + 28);
+  for (const x of [-ROOM_W / 2 + 32, ROOM_W / 2 - 32]) {
+    roomBox(62, 76, ROOM_D, trimWood, x, FLOOR_Y + 55, 0);
+    roomBox(45, 54, ROOM_D, trimWood, x, FLOOR_Y + 1150, 0);
+  }
+
+  const ceilingMat = new THREE.MeshStandardMaterial({ color: 0xd8cebb, roughness: 0.94, side: THREE.FrontSide });
+  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, ROOM_D), ceilingMat);
+  ceiling.rotation.x = Math.PI / 2; ceiling.position.y = CEILING_Y; ceiling.receiveShadow = true; scene.add(ceiling);
+  for (const x of [-2400, 0, 2400]) roomBox(90, 110, ROOM_D, trimWood, x, CEILING_Y - 55, 0);
+  for (const z of [-2200, 0, 2200]) roomBox(ROOM_W, 110, 90, trimWood, 0, CEILING_Y - 55, z);
+
+  // Warm ceiling fixtures and a soft table wash make the room feel occupied rather than staged.
+  const lightTarget = new THREE.Object3D(); lightTarget.position.set(0, -80, 0); scene.add(lightTarget);
+  for (const [x, z] of [[-1550, -500], [0, 250], [1550, -500]]) {
+    roomBox(210, 34, 210, trimWood, x, CEILING_Y - 125, z);
+    const glow = new THREE.Mesh(new THREE.CircleGeometry(72, 24), new THREE.MeshStandardMaterial({ color: 0xffd49a, emissive: 0xffb45e, emissiveIntensity: 1.8 }));
+    glow.rotation.x = Math.PI / 2; glow.position.set(x, CEILING_Y - 144, z); scene.add(glow);
+    const spot = new THREE.SpotLight(0xffc77d, 550, 5600, Math.PI * .28, .65, 1.1);
+    spot.position.set(x, CEILING_Y - 170, z); spot.target = lightTarget; scene.add(spot);
+  }
+
+  // Intentional wall layout: a large central identity sign, two jerseys, two flags, pennants,
+  // and a few smaller photos. The gaps keep the wall collegiate without turning it into a collage.
+  wallFrame(0, 1120, 1280, 560, signTexture("HOKIE WAR ROOM", "STRATEGY • TRADITION • TEAM"));
+  wallFrame(-1500, 1080, 520, 650, jerseyTexture("25", "VIRGINIA TECH"));
+  wallFrame(1500, 1080, 520, 650, jerseyTexture("7", "HOKIES", "#e5751f", "#861f41"));
+  wallFrame(-2550, 1540, 520, 820, signTexture("VT", "EST. 1872", "#861f41", "#e5751f"));
+  wallFrame(2550, 1540, 520, 820, signTexture("HOKIES", "GAME DAY", "#e5751f", "#861f41"));
+  wallFrame(-700, 690, 700, 260, pennantTexture("GO HOKIES", "#861f41", "#e5751f"));
+  wallFrame(700, 690, 700, 260, pennantTexture("LET'S GO VT", "#e5751f", "#861f41"));
+  wallFrame(-2350, 650, 500, 310, signTexture("LANE", "SATURDAY NIGHTS", "#3b2a22", "#e5751f"));
+  wallFrame(2350, 650, 500, 310, signTexture("ENTER", "SANDMAN", "#3b2a22", "#e5751f"));
+  sideWallFrame(1, -900, 1450, 980, 460, signTexture("HOKIE COUNTRY", "ORANGE • MAROON • LOYALTY"));
+  sideWallFrame(1, 650, 880, 620, 360, signTexture("HOME FIELD", "BLACKSBURG, VA", "#3b2a22", "#e5751f"));
+  sideWallFrame(-1, -650, 1250, 900, 440, signTexture("VIRGINIA TECH", "UT PROSIM", "#861f41", "#e5751f"));
+
+  // Low cabinets and side benches establish believable surrounding furniture while keeping the
+  // table clear as the hero object.
+  roomBox(1700, 520, 360, darkWood, 0, FLOOR_Y + 260, -ROOM_D / 2 + 230);
+  for (const x of [-510, 0, 510]) roomBox(12, 430, 370, brassMat, x, FLOOR_Y + 260, -ROOM_D / 2 + 220, { cast: false });
+  for (const x of [-2050, 2050]) {
+    roomBox(720, 95, 350, darkWood, x, FLOOR_Y + 480, 350);
+    for (const z of [230, 470]) roomBox(80, 450, 80, trimWood, x, FLOOR_Y + 225, z);
+  }
+}
+
+buildWarRoom();
+
+// The campus surface is still the interaction plane; it is now the inset top of a real table.
 const BOARD_T = 60;
 const board = new THREE.Mesh(
   new THREE.BoxGeometry(HALF * 2 + 40, BOARD_T, HALF * 2 + 40),
   [ // +x, -x, +y (top), -y, +z, -z
-    mat(COLORS.walnut, 0.7), mat(COLORS.walnut, 0.7), mat(COLORS.ground, 1),
-    mat(COLORS.walnut, 0.7), mat(COLORS.walnut, 0.7), mat(COLORS.walnut, 0.7),
+    darkWood, darkWood, mat(COLORS.ground, 1), darkWood, darkWood, darkWood,
   ]
 );
 board.position.y = -BOARD_T / 2;
-board.receiveShadow = true;
+board.castShadow = board.receiveShadow = true;
 scene.add(board);
+
+// Aprons, four weighty legs, and broad feet make the tabletop visibly meet the floor.
+for (const z of [-925, 925]) roomBox(1850, 170, 92, darkWood, 0, -145, z);
+for (const x of [-925, 925]) roomBox(92, 170, 1850, darkWood, x, -145, 0);
+for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+  const x = sx * 850, z = sz * 850;
+  const leg = roomBox(172, 650, 172, darkWood, x, -515, z);
+  leg.rotation.z = -sx * .035; leg.rotation.x = sz * .035;
+  roomBox(235, 48, 235, trimWood, sx * 865, -826, sz * 865);
+  roomBox(205, 42, 205, brassMat, sx * 838, -192, sz * 838);
+}
+// Brass rim and corner bolts visually seat the interactive campus model inside the tabletop.
+for (const z of [-1013, 1013]) roomBox(2040, 11, 14, brassMat, 0, 5, z, { cast: false });
+for (const x of [-1013, 1013]) roomBox(14, 11, 2040, brassMat, x, 5, 0, { cast: false });
+for (const x of [-988, 988]) for (const z of [-988, 988]) {
+  const bolt = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 7, 18), brassMat);
+  bolt.position.set(x, 8, z); bolt.castShadow = true; scene.add(bolt);
+}
 
 // ---------- Post-processing: tilt-shift + grade ----------
 const composer = new EffectComposer(renderer);
@@ -165,10 +369,13 @@ const grade = new ShaderPass({
 composer.addPass(blurH); composer.addPass(blurV); composer.addPass(grade); composer.addPass(new OutputPass());
 
 function resize() {
-  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
+  // A hidden or collapsed tab can report 0x0. Clamping keeps aspect finite: an NaN aspect
+  // poisons the projection matrix and the view never comes back when the size returns.
+  const w = Math.max(1, innerWidth), h = Math.max(1, innerHeight);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  renderer.setSize(w, h); composer.setSize(w, h);
   const pr = renderer.getPixelRatio();
-  for (const p of [blurH, blurV]) p.uniforms.resolution.value.set(innerWidth * pr, innerHeight * pr);
+  for (const p of [blurH, blurV]) p.uniforms.resolution.value.set(w * pr, h * pr);
 }
 addEventListener("resize", resize); resize();
 
@@ -864,6 +1071,31 @@ window.debugBuildings = () => {
                  height: +b.height.toFixed(1), radius: +b.radius.toFixed(1) }));
   console.table(rows); return rows;
 };
+// Project map points (metres, y = north) to screen pixels — used to check that the
+// bird's-eye view really frames the route inside the area the UI panels leave visible.
+window.debugProject = (points) => points.map(([x, y]) => {
+  const v = new THREE.Vector3(x, 1.6, -y).project(camera);
+  return [(v.x * 0.5 + 0.5) * innerWidth, (-v.y * 0.5 + 0.5) * innerHeight];
+});
+
+// Where the flag sits versus the building's real bounds — used to check the marker never
+// sinks into a roof or floats away from it.
+window.debugMarker = (name) => {
+  const b = findBuilding(name);
+  if (!b) return `No building on the map matches "${name}".`;
+  const box = new THREE.Box3().setFromObject(b.group);
+  const spot = markerSpot(b);
+  return {
+    name: b.name, parts: b.parts.length,
+    roofTop: +box.max.y.toFixed(2),
+    storedHeight: +b.height.toFixed(2),
+    flagBase: +spot.y.toFixed(2),
+    roofUnderFlag: +spot.surfaceY.toFixed(2),
+    clearanceAboveRoof: +(spot.y - spot.surfaceY).toFixed(2),
+    offsetFromCentre: +Math.hypot(spot.x - (box.min.x + box.max.x) / 2, spot.z - (box.min.z + box.max.z) / 2).toFixed(2),
+  };
+};
+
 window.debugBuilding = (name) => {
   const b = findBuilding(name);
   if (!b) return `No building on the map matches "${name}".`;

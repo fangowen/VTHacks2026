@@ -6,6 +6,21 @@ import { pickLang, t, catLabel } from "./i18n.js";
 
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const norm = (s) => String(s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+const DESCRIPTION_KEY = {
+  "Academic & admin": "placeDescAcademic", "Residence halls": "placeDescResidence",
+  "Dining": "placeDescDining", "Athletics & recreation": "placeDescAthletics",
+  "Libraries": "placeDescLibrary", "Parking": "placeDescParking",
+  "Landmarks": "placeDescLandmark", "Other": "placeDescOther",
+};
+
+// Describe an uncurated building by both its map category and its position on campus. This keeps
+// every directory entry useful without inventing departments, opening hours, or accessibility
+// claims that are not present in the source data.
+function campusLocationKey(place) {
+  if (Math.hypot(place.x, place.y) < 260) return "campusCenter";
+  if (Math.abs(place.x) > Math.abs(place.y)) return place.x > 0 ? "campusEast" : "campusWest";
+  return place.y > 0 ? "campusNorth" : "campusSouth";
+}
 
 export class PlaceIndex {
   constructor(map) {
@@ -119,7 +134,10 @@ export class PlaceIndex {
   description(place) {
     const meta = place.meta;
     if (meta) return pickLang(meta.text).description;
-    return t("genericNoInfo");
+    return t(DESCRIPTION_KEY[place.category] ?? "placeDescOther", {
+      place: place.name,
+      location: t(campusLocationKey(place)),
+    });
   }
   purpose(place) { return place.meta ? pickLang(place.meta.text).purpose : null; }
   why(place) { return place.meta ? pickLang(place.meta.text).why : null; }

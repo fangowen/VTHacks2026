@@ -92,44 +92,84 @@ export function createNavigator(map, hooks = {}) {
     moveCamera(to, to.clone().add(offset), ms);
   }
 
-  // Bird's-eye: pull up and out far enough to frame the whole route in the part of the screen
-  // that isn't covered by panels, keeping the user's current compass angle.
+  // Bird's-eye: pull up and out far enough to frame the whole route inside the part of the
+  // screen the panels leave clear. Rather than deriving screen offsets by hand (easy to get the
+  // sign wrong), we frame with a trial camera, measure where the route actually lands in pixels,
+  // and correct. Two passes converge well within a pixel or two.
   function frameRoute() {
     const { points } = state;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const [x, y] of points) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
     const center = new THREE.Vector3((x0 + x1) / 2, 0, -(y0 + y1) / 2);
 
-    // How much of the viewport the UI covers, so the route lands in the clear area
+    const w = Math.max(1, map.renderer.domElement.clientWidth);
+    const h = Math.max(1, map.renderer.domElement.clientHeight);
     const insets = hooks.getInsets?.() ?? { left: 0, right: 0, top: 0, bottom: 0 };
-    const w = map.renderer.domElement.clientWidth, h = map.renderer.domElement.clientHeight;
-    const visibleW = Math.max(120, w - insets.left - insets.right);
-    const visibleH = Math.max(120, h - insets.top - insets.bottom);
-
-    const fov = map.camera.fov * Math.PI / 180;
-    const halfW = (x1 - x0) / 2, halfH = (y1 - y0) / 2;
-    // The ground plane is foreshortened by the camera tilt, so the depth extent needs more room
-    const visibleAspect = visibleW / visibleH;
-    const needV = Math.max(halfH / Math.cos(OVERVIEW_POLAR), halfW / visibleAspect, 60) * ROUTE_PADDING;
-    const dist = Math.min(controls.maxDistance,
-      Math.max(controls.minDistance, needV / Math.tan(fov / 2) * (h / visibleH)));
+    // The rectangle of screen the UI leaves clear, with a comfortable margin
+    const pad = 24;
+    const clear = {
+      left: Math.min(insets.left, w * 0.4) + pad,
+      right: w - Math.min(insets.right, w * 0.4) - pad,
+      top: Math.min(insets.top, h * 0.4) + pad,
+      bottom: h - Math.min(insets.bottom, h * 0.4) - pad,
+    };
+    const clearW = Math.max(80, clear.right - clear.left);
+    const clearH = Math.max(80, clear.bottom - clear.top);
+    const wantCx = (clear.left + clear.right) / 2, wantCy = (clear.top + clear.bottom) / 2;
 
     const az = Math.atan2(map.camera.position.x - controls.target.x, map.camera.position.z - controls.target.z);
-    const position = new THREE.Vector3(
-      center.x + dist * Math.sin(OVERVIEW_POLAR) * Math.sin(az),
-      center.y + dist * Math.cos(OVERVIEW_POLAR),
-      center.z + dist * Math.sin(OVERVIEW_POLAR) * Math.cos(az));
+    const aspect = Number.isFinite(map.camera.aspect) && map.camera.aspect > 0 ? map.camera.aspect : w / h;
+    const fov = map.camera.fov * Math.PI / 180;
+    const spanX = x1 - x0, spanY = y1 - y0;
+    let dist = Math.max(spanY / Math.cos(OVERVIEW_POLAR), spanX / aspect, 120) / (2 * Math.tan(fov / 2)) * ROUTE_PADDING;
+    if (!Number.isFinite(dist)) dist = 1500;
 
-    // Shift the look-at point so the route is centred in the *visible* rectangle, not the window
-    const worldPerPixel = 2 * dist * Math.tan(fov / 2) / h;
-    const dx = (insets.left - insets.right) / 2 * worldPerPixel;
-    const dy = (insets.top - insets.bottom) / 2 * worldPerPixel;
-    // Screen-right is viewDirection × worldUp. Using the inverse vector shifts routes toward the
-    // covered side of the screen (the old right-panel regression).
-    const right = new THREE.Vector3().subVectors(center, position).cross(new THREE.Vector3(0, 1, 0)).normalize();
-    const forwardOnGround = new THREE.Vector3(center.x - position.x, 0, center.z - position.z).normalize();
-    const target = center.clone().addScaledVector(right, -dx).addScaledVector(forwardOnGround, dy);
-    return { target, position: position.add(target.clone().sub(center)) };
+    const cam = map.camera.clone();
+    cam.aspect = aspect;
+    let target = center.clone();
+    const place = () => {
+      cam.position.set(
+        target.x + dist * Math.sin(OVERVIEW_POLAR) * Math.sin(az),
+        target.y + dist * Math.cos(OVERVIEW_POLAR),
+        target.z + dist * Math.sin(OVERVIEW_POLAR) * Math.cos(az));
+      cam.lookAt(target);
+      cam.updateMatrixWorld(true);
+      cam.updateProjectionMatrix();
+    };
+    const screenBox = () => {
+      let sx0 = Infinity, sy0 = Infinity, sx1 = -Infinity, sy1 = -Infinity;
+      const v = new THREE.Vector3();
+      for (const [px, py] of points) {
+        v.set(px, 1.6, -py).project(cam);
+        const sx = (v.x * 0.5 + 0.5) * w, sy = (-v.y * 0.5 + 0.5) * h;
+        sx0 = Math.min(sx0, sx); sx1 = Math.max(sx1, sx);
+        sy0 = Math.min(sy0, sy); sy1 = Math.max(sy1, sy);
+      }
+      return { sx0, sy0, sx1, sy1 };
+    };
+
+    for (let pass = 0; pass < 3; pass++) {
+      place();
+      const b = screenBox();
+      const boxW = Math.max(1, b.sx1 - b.sx0), boxH = Math.max(1, b.sy1 - b.sy0);
+      // Scale distance so the route fits the clear rectangle
+      const grow = Math.max(boxW / clearW, boxH / clearH);
+      if (pass < 2) dist = Math.min(controls.maxDistance, Math.max(controls.minDistance, dist * grow));
+      place();
+      const b2 = screenBox();
+      // Then slide the look-at point so the route sits in the middle of that rectangle
+      const dxPx = wantCx - (b2.sx0 + b2.sx1) / 2;
+      const dyPx = wantCy - (b2.sy0 + b2.sy1) / 2;
+      if (Math.abs(dxPx) < 1 && Math.abs(dyPx) < 1 && grow < 1.02) break;
+      const right = new THREE.Vector3(), up = new THREE.Vector3();
+      cam.matrixWorld.extractBasis(right, up, new THREE.Vector3());
+      const worldPerPixel = 2 * dist * Math.tan(fov / 2) / h;
+      // Moving the target against the pixel error brings the route toward the clear centre
+      target.addScaledVector(right, -dxPx * worldPerPixel);
+      target.addScaledVector(up, dyPx * worldPerPixel);
+    }
+    place();
+    return { target, position: cam.position.clone() };
   }
 
   function setView(next) {
