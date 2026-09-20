@@ -418,15 +418,25 @@ export function createUI(ctl) {
     const vw = innerWidth, vh = innerHeight, gap = 12;
     let left = 0, right = 0, topInset = top.getBoundingClientRect().bottom + gap, bottom = 0;
     const visible = (node) => {
+      if (!node || node.hidden) return false;
       const style = getComputedStyle(node);
-      return !node.hidden && style.visibility !== "hidden" && style.display !== "none";
+      if (style.visibility === "hidden" || style.display === "none") return false;
+      return node.getBoundingClientRect().width > 0;
     };
-    if (visible(panel) && vw > 900) left = panel.getBoundingClientRect().right + gap;
-    if (vw > 900) {
-      for (const node of [hud, chat]) if (visible(node)) right = Math.max(right, vw - node.getBoundingClientRect().left + gap);
-    } else {
-      if (visible(hud)) topInset = Math.max(topInset, hud.getBoundingClientRect().bottom + gap);
-      if (visible(chat)) bottom = Math.max(bottom, vh - chat.getBoundingClientRect().top + gap);
+    const wide = vw > 900;
+    // Work out which edge each floating panel occupies from where it actually is, so moving a
+    // panel in CSS can't silently feed the camera a wrong inset.
+    for (const node of [panel, hud, chat]) {
+      if (!visible(node)) continue;
+      const r = node.getBoundingClientRect();
+      if (wide) {
+        if ((r.left + r.right) / 2 < vw / 2) left = Math.max(left, r.right + gap);
+        else right = Math.max(right, vw - r.left + gap);
+      } else if ((r.top + r.bottom) / 2 < vh / 2) {
+        topInset = Math.max(topInset, r.bottom + gap);
+      } else {
+        bottom = Math.max(bottom, vh - r.top + gap);
+      }
     }
     return { left, right, top: topInset, bottom };
   };
