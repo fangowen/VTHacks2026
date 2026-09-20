@@ -1,6 +1,6 @@
 // Backend API client.
 //
-// The frontend holds no provider keys: the Hokie Guide server (see /server) owns them and calls
+// The frontend holds no provider keys: WHERE THE HOKIE AM I? server (see /server) owns them and calls
 // Gemini and ElevenLabs on our behalf.
 
 /**
@@ -56,16 +56,16 @@ async function postJSON(path, body) {
 }
 
 /**
- * Ask the Hokie Guide. The server is stateless, so we send the recent turns with each message.
+ * Ask WHERE THE HOKIE AM I?. The server is stateless, so we send the recent turns and live map state.
  *
  * POST /api/guide
- *   request:  { message, language, history, context, buildings: [exact map labels] }
+ *   request:  { message, language, history, buildings, currentLocation, studentContext }
  *   response: { text, action: { type: "flyTo", building } | null, audio, speechError }
  *
  * @returns {Promise<{text: string, action: object|null, audio: string|null}|null>} null when unavailable.
  */
-export async function askGuide({ message, language = "en", history = [], context = "", buildings = [] }) {
-  const data = await postJSON("/api/guide", { message, language, history, context, buildings });
+export async function askGuide({ message, language = "en", history = [], buildings = [], currentLocation = null, studentContext = {} }) {
+  const data = await postJSON("/api/guide", { message, language, history, buildings, currentLocation, studentContext });
   if (!data?.text) return null;
   return { text: data.text, action: data.action ?? null, audio: data.audio ?? null, speechError: data.speechError ?? null };
 }

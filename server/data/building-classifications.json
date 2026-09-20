@@ -1,0 +1,1113 @@
+{
+  "_meta": {
+    "generatedAt": "2026-09-20T05:58:11.547Z",
+    "model": "gemini-3.5-flash-lite",
+    "categories": [
+      "dining",
+      "academic",
+      "residence",
+      "library",
+      "athletics",
+      "services",
+      "arts",
+      "student-life",
+      "parking",
+      "other"
+    ],
+    "note": "Set manualOverride=true on a building to preserve hand edits when this script is rerun."
+  },
+  "buildings": {
+    "Agnew Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University building used for academic purposes."
+    },
+    "Architecture Annex": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University building for architecture programs."
+    },
+    "Armory": {
+      "categories": [
+        "academic",
+        "services"
+      ],
+      "containsDining": false,
+      "rationale": "University armory building."
+    },
+    "Bishop-Favrao Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Burchard Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Burrows-Burleson Tennis Facility": {
+      "categories": [
+        "athletics"
+      ],
+      "containsDining": false,
+      "rationale": "Tennis facility for sports."
+    },
+    "Burruss Hall": {
+      "categories": [
+        "academic",
+        "services"
+      ],
+      "containsDining": false,
+      "rationale": "Landmark university building containing academic advising."
+    },
+    "Campbell Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Campus dormitory building."
+    },
+    "Cassell Coliseum": {
+      "categories": [
+        "athletics"
+      ],
+      "containsDining": false,
+      "rationale": "Sports stadium and coliseum."
+    },
+    "Center for the Arts at Virginia Tech": {
+      "categories": [
+        "arts",
+        "student-life"
+      ],
+      "containsDining": false,
+      "rationale": "Center for the arts and student activities."
+    },
+    "Cheatham Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Chemical Storage Building": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "Storage building."
+    },
+    "Chicken Hill Ranch": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "Detached ranch structure."
+    },
+    "Cochrane Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Campus dormitory building."
+    },
+    "College of Liberal Arts and Human Sciences Building": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building for liberal arts."
+    },
+    "Corps Leadership and Military Science Building": {
+      "categories": [
+        "academic",
+        "student-life"
+      ],
+      "containsDining": false,
+      "rationale": "Military science and leadership building."
+    },
+    "Cowgill Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Creativity and Innovation District Residence Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Campus residence hall."
+    },
+    "Data and Decision Sciences Building": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Davidson Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Derring Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Dietrick Hall": {
+      "categories": [
+        "dining",
+        "student-life"
+      ],
+      "containsDining": true,
+      "rationale": "Dining hall containing multiple food venues and a coffee spot."
+    },
+    "Drone Park Lab": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University research laboratory."
+    },
+    "Durham Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "East Ambler Johnston Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Dormitory building used for student housing."
+    },
+    "East Eggleston Hall": {
+      "categories": [
+        "residence",
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University building functioning as a residence hall."
+    },
+    "Ecosystem Simulation Lab": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University laboratory building."
+    },
+    "Engel Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Equine Podiatry Service": {
+      "categories": [
+        "services"
+      ],
+      "containsDining": false,
+      "rationale": "Provides veterinary podiatry services."
+    },
+    "Fleet Services": {
+      "categories": [
+        "services"
+      ],
+      "containsDining": false,
+      "rationale": "Provides fleet and vehicle services."
+    },
+    "Food Science and Technology Lab": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University laboratory for food science."
+    },
+    "Football Locker Room": {
+      "categories": [
+        "athletics"
+      ],
+      "containsDining": false,
+      "rationale": "Sports center and locker room."
+    },
+    "Fralin Life Science Institute": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University research institute."
+    },
+    "Glade Road Turfgrass Research Center": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "Research center for turfgrass."
+    },
+    "Goodwin Hall": {
+      "categories": [
+        "academic",
+        "student-life"
+      ],
+      "containsDining": false,
+      "rationale": "Engineering building with team rooms and study space."
+    },
+    "Graduate Life Center": {
+      "categories": [
+        "student-life",
+        "services"
+      ],
+      "containsDining": false,
+      "rationale": "Graduate life center and student lounge."
+    },
+    "Hahn Garden Pavilion": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "Garden pavilion."
+    },
+    "Hahn Hall North": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Hahn Hall South": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Hahn-Hurst Basketball Practice Center": {
+      "categories": [
+        "athletics"
+      ],
+      "containsDining": false,
+      "rationale": "Basketball practice sports center."
+    },
+    "Hancock Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Harper Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Dormitory building."
+    },
+    "Henderson Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Hillcrest Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Dormitory building."
+    },
+    "Hitt Hall": {
+      "categories": [
+        "academic",
+        "dining"
+      ],
+      "containsDining": true,
+      "rationale": "University building containing Perry Place dining venue."
+    },
+    "Hoge Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Dormitory building."
+    },
+    "Holden Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Holtzman Alumni Center": {
+      "categories": [
+        "services",
+        "student-life"
+      ],
+      "containsDining": false,
+      "rationale": "Alumni center building."
+    },
+    "Human and Agricultural Biosciences Building I": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University building used for academic and research purposes."
+    },
+    "Hutcheson Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University building used for academic purposes."
+    },
+    "ICTAS II": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University research and academic building."
+    },
+    "Jamerson Athletic Center": {
+      "categories": [
+        "athletics"
+      ],
+      "containsDining": false,
+      "rationale": "Athletic center for sports."
+    },
+    "Johnson Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Student dormitory building."
+    },
+    "Johnston Student Center": {
+      "categories": [
+        "student-life"
+      ],
+      "containsDining": false,
+      "rationale": "Student center building."
+    },
+    "Kelly Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University institute and academic building."
+    },
+    "Lane Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Lane Stadium": {
+      "categories": [
+        "athletics"
+      ],
+      "containsDining": false,
+      "rationale": "Campus football stadium."
+    },
+    "Latham Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic and research building."
+    },
+    "Lavery Hall": {
+      "categories": [
+        "academic",
+        "dining"
+      ],
+      "containsDining": true,
+      "rationale": "University building featuring a dining venue."
+    },
+    "Life Sciences I": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University life sciences academic building."
+    },
+    "Litton-Reaves Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Main Eggleston Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Student dormitory hall."
+    },
+    "Major Williams Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Marching Virginians Center": {
+      "categories": [
+        "arts",
+        "student-life"
+      ],
+      "containsDining": false,
+      "rationale": "Center for marching band and student activities."
+    },
+    "McBryde Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "Academic building for computer science and mathematics."
+    },
+    "McComas Hall": {
+      "categories": [
+        "athletics",
+        "services",
+        "student-life"
+      ],
+      "containsDining": false,
+      "rationale": "Campus gym, counseling services, and student activities."
+    },
+    "Media Annex": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University media and academic annex."
+    },
+    "Media Building": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University media building."
+    },
+    "Merryman Athletic Center": {
+      "categories": [
+        "athletics"
+      ],
+      "containsDining": false,
+      "rationale": "Athletic center."
+    },
+    "Miles Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Student dormitory hall."
+    },
+    "Military Building": {
+      "categories": [
+        "academic",
+        "student-life"
+      ],
+      "containsDining": false,
+      "rationale": "Military and university academic building."
+    },
+    "New Classroom Building": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University classroom building."
+    },
+    "New Hall West": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Dormitory building used for student housing."
+    },
+    "New Residence Hall East": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Dormitory building used for student housing."
+    },
+    "Newman Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Dormitory building used for student housing."
+    },
+    "Newman Library": {
+      "categories": [
+        "library"
+      ],
+      "containsDining": false,
+      "rationale": "Main university library."
+    },
+    "Norris Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University building for academic use."
+    },
+    "North Chiller Plant": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "Industrial chiller plant."
+    },
+    "North End Center": {
+      "categories": [
+        "academic",
+        "services"
+      ],
+      "containsDining": false,
+      "rationale": "University office and educational building."
+    },
+    "North End Parking Garage": {
+      "categories": [
+        "parking"
+      ],
+      "containsDining": false,
+      "rationale": "Multi-storey parking garage."
+    },
+    "O'Shaughnessy Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Dormitory building used for student housing."
+    },
+    "Old Security Building": {
+      "categories": [
+        "services"
+      ],
+      "containsDining": false,
+      "rationale": "Security and campus services building."
+    },
+    "Orange Building": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "Campus building."
+    },
+    "Owens Hall": {
+      "categories": [
+        "dining",
+        "student-life"
+      ],
+      "containsDining": true,
+      "rationale": "Contains Owens Food Court."
+    },
+    "Pack Building": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Pamplin Hall": {
+      "categories": [
+        "academic",
+        "student-life"
+      ],
+      "containsDining": false,
+      "rationale": "Academic hall hosting student clubs."
+    },
+    "Parking Services": {
+      "categories": [
+        "services"
+      ],
+      "containsDining": false,
+      "rationale": "Parking services office."
+    },
+    "Patton Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Payne Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Dormitory building used for student housing."
+    },
+    "Pearson Hall East": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University building."
+    },
+    "Pearson Hall West": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University building."
+    },
+    "Peddrew-Yates Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Dormitory building used for student housing."
+    },
+    "Perry Street Parking Deck": {
+      "categories": [
+        "parking"
+      ],
+      "containsDining": false,
+      "rationale": "Parking deck."
+    },
+    "Plant Pathology Garage": {
+      "categories": [
+        "parking"
+      ],
+      "containsDining": false,
+      "rationale": "Garage building."
+    },
+    "Plant Pathology Greehouse": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "Greenhouse for plant pathology."
+    },
+    "Plant Pathology Lab and Office": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "Lab and office building."
+    },
+    "Price Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University building used for academic purposes."
+    },
+    "Pritchard Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Dormitory building providing student housing."
+    },
+    "Rec Sports Field House": {
+      "categories": [
+        "athletics"
+      ],
+      "containsDining": false,
+      "rationale": "Sports center and field house."
+    },
+    "Rector Field House": {
+      "categories": [
+        "athletics"
+      ],
+      "containsDining": false,
+      "rationale": "Athletic field house facility."
+    },
+    "Robeson Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "Sandy Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University building."
+    },
+    "Saunders Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University building."
+    },
+    "Seitz Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University building."
+    },
+    "Shanks Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University building."
+    },
+    "Skelton Conference Center": {
+      "categories": [
+        "services"
+      ],
+      "containsDining": false,
+      "rationale": "Conference center facility."
+    },
+    "Slusher Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Dormitory building."
+    },
+    "Slusher Wing": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Dormitory building wing."
+    },
+    "Smith Career Center": {
+      "categories": [
+        "services"
+      ],
+      "containsDining": false,
+      "rationale": "Career and professional development center."
+    },
+    "Smithfield House": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "Historic house."
+    },
+    "Smithfield Miller's Cabin": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "Farm auxiliary building."
+    },
+    "Smithfield Smoke House": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "Farm auxiliary building."
+    },
+    "Smithfield Weaver's/Cook's Cabin": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "Farm auxiliary building."
+    },
+    "Smyth Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University building."
+    },
+    "Solitude": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "Historic house used for education."
+    },
+    "Southgate Center": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "University building."
+    },
+    "Southwest Chiller Plant": {
+      "categories": [
+        "services"
+      ],
+      "containsDining": false,
+      "rationale": "Utility chiller plant."
+    },
+    "Squires Student Center": {
+      "categories": [
+        "student-life",
+        "dining",
+        "arts"
+      ],
+      "containsDining": true,
+      "rationale": "Student union featuring performance spaces and a food court."
+    },
+    "Steger Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University building."
+    },
+    "Student Opportunities & Achievement Resources Program House": {
+      "categories": [
+        "student-life",
+        "services"
+      ],
+      "containsDining": false,
+      "rationale": "Program house for student opportunities and achievement."
+    },
+    "Student Services Building": {
+      "categories": [
+        "services"
+      ],
+      "containsDining": false,
+      "rationale": "Houses student services such as Hokie Passport."
+    },
+    "Surge Space Building": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University surge space building for academic use."
+    },
+    "The Grove": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "Insufficient evidence to classify specifically."
+    },
+    "The Inn at Virginia Tech": {
+      "categories": [
+        "services",
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "Hotel and inn facility on campus."
+    },
+    "The Pavilion at Smithfield": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "Pavilion structure without specific academic or residential tags."
+    },
+    "The Pylons": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "War memorial chapel and monument."
+    },
+    "Theatre 101": {
+      "categories": [
+        "arts",
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University theatre used for drama."
+    },
+    "Thomas Connor House": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "Used by the School of Public and International Affairs."
+    },
+    "Torgersen Hall": {
+      "categories": [
+        "academic",
+        "library",
+        "student-life"
+      ],
+      "containsDining": false,
+      "rationale": "Academic hall providing study space and library connection."
+    },
+    "Transit Center": {
+      "categories": [
+        "services"
+      ],
+      "containsDining": false,
+      "rationale": "Transportation and transit center."
+    },
+    "Undergraduate Science Laboratory Building": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "Undergraduate science laboratory building."
+    },
+    "Upper Quad Hall North": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Student dormitory building."
+    },
+    "Urban Pest Control Facility": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "Pest control facility."
+    },
+    "Vawter Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Student dormitory."
+    },
+    "Virginia Tech Institute for Policy and Governance": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "Research institute for policy and governance."
+    },
+    "Virginia Tech Power Plant": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "Campus power plant."
+    },
+    "Virginia Tech Stability Wind Tunnel": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University research facility for aerospace engineering."
+    },
+    "Virginia Tech Women's Center": {
+      "categories": [
+        "services",
+        "student-life"
+      ],
+      "containsDining": false,
+      "rationale": "Women's center providing support and advocacy."
+    },
+    "Virginia-Maryland College of Veterinary Medicine": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "Veterinary college and teaching hospital."
+    },
+    "Visitors and Undergraduate Admissions Center": {
+      "categories": [
+        "services"
+      ],
+      "containsDining": false,
+      "rationale": "Visitors and undergraduate admissions center."
+    },
+    "VT Engage": {
+      "categories": [
+        "student-life",
+        "services"
+      ],
+      "containsDining": false,
+      "rationale": "Center for leadership and service learning."
+    },
+    "Wallace Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University academic building."
+    },
+    "War Memorial Hall": {
+      "categories": [
+        "athletics",
+        "student-life"
+      ],
+      "containsDining": false,
+      "rationale": "University hall used for athletics and student recreation."
+    },
+    "Weaver Building": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "Building with insufficient details for specific categorization."
+    },
+    "West Ambler Johnston Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Dormitory building used for student residence."
+    },
+    "West Eggleston Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Dormitory building used for student residence."
+    },
+    "West End Market": {
+      "categories": [
+        "dining"
+      ],
+      "containsDining": true,
+      "rationale": "Dining venue."
+    },
+    "Whitehurst Hall": {
+      "categories": [
+        "residence"
+      ],
+      "containsDining": false,
+      "rationale": "Dormitory building used for student residence."
+    },
+    "Whittemore Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "University building used for academic purposes."
+    },
+    "Williams Hall": {
+      "categories": [
+        "academic"
+      ],
+      "containsDining": false,
+      "rationale": "College building used for academic purposes."
+    },
+    "Wood Shack": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "Insufficient evidence to classify."
+    },
+    "Wright House": {
+      "categories": [
+        "other"
+      ],
+      "containsDining": false,
+      "rationale": "University building of unspecified use."
+    }
+  }
+}

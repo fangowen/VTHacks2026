@@ -40,6 +40,7 @@ export class PlaceIndex {
       const meta = metaByObj.get(b.id) ?? metaByName.get(norm(b.name)) ?? null;
       this.add({
         id: meta?.id ?? slug(b.name), kind: "building", name: b.name, category: b.category,
+        categories: b.categories ?? [b.category],
         building: b, meta, x: b.center.x, y: -b.center.z,
       });
     }
@@ -96,7 +97,7 @@ export class PlaceIndex {
   search(text, category = null) {
     const q = norm(text);
     return this.places
-      .filter((p) => !category || p.category === category)
+      .filter((p) => !category || (p.categories ?? [p.category]).includes(category))
       .filter((p) => !q || norm(p.name).includes(q) || norm(catLabel(p.category)).includes(q))
       .sort((a, b) => a.name.localeCompare(b.name));
   }

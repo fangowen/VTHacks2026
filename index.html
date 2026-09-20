@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Hokie War Table</title>
+<title>WHERE THE HOKIE AM I?</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet" />
 <style>
   :root {
     --room: #1c1714;
@@ -28,7 +28,7 @@
 
   .status {
     position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none;
-    font-family: "Big Shoulders Stencil Display", Impact, sans-serif; font-size: 28px; color: var(--brass);
+    font-family: var(--display, "Fredoka"), "Trebuchet MS", sans-serif; font-size: 28px; color: var(--brass);
     text-align: center; padding: 24px;
   }
   .status small { display: block; font: 15px/1.5 "Source Serif 4", Georgia, serif; color: var(--parchment); margin-top: 8px; max-width: 46ch; }
@@ -52,6 +52,7 @@
 <script type="module">
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
@@ -69,7 +70,7 @@ const COLORS = {
 };
 const ROOM = Object.freeze({ width: 13200, depth: 12600, floorY: -850, wallHeight: 7400 });
 const ROOM_MARGIN = 170;
-const TABLE_FABRIC_COLOR = "#6f1738"; // One-place edit for the skirt (VT maroon: #861f41).
+let buildingClassifications = {};
 
 // ---------- Projection (lat/lon -> local meters; +x east, -z north) ----------
 const M_LAT = 110540, M_LON = 111320 * Math.cos(CENTER.lat * Math.PI / 180);
@@ -92,7 +93,7 @@ scene.fog = new THREE.Fog(COLORS.room, 11500, 19500);
 
 // The usual narrow FOV reads like a scale model. Only the last part of the restored zoom-out
 // range widens gradually so the larger room walls and their decor fit in view from low angles.
-const BASE_FOV = 22, ROOM_FOV = 40;
+const BASE_FOV = 22, ROOM_FOV = 60;
 const camera = new THREE.PerspectiveCamera(BASE_FOV, innerWidth / innerHeight, 10, 30000);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -181,7 +182,7 @@ function fittedText(ctx, text, maxWidth, startSize, family = "Impact, sans-serif
   do { ctx.font = `800 ${size}px ${family}`; size -= 2; } while (size > 18 && ctx.measureText(text).width > maxWidth);
   return size + 2;
 }
-function wallFrame(x, y, w, h, texture, { z = -ROOM.depth / 2 + 100, frame = trimWood } = {}) {
+function wallFrame(x, y, w, h, texture, { z = -ROOM.depth / 2 + 17, frame = trimWood } = {}) {
   roomBox(w + 54, h + 54, 34, frame, x, y, z, { cast: true, receive: false });
   const art = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: texture, roughness: 0.72, transparent: true }));
   art.position.set(x, y, z + 19); art.castShadow = false; scene.add(art); return art;
@@ -220,9 +221,22 @@ function pennantTexture(text, base, accent) {
   });
 }
 
+function abstractPennantTexture() {
+  return canvasArt(640, 300, (ctx, w, h) => {
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "#6f1738"; ctx.beginPath();
+    ctx.moveTo(14, 14); ctx.lineTo(w - 14, h / 2); ctx.lineTo(14, h - 14); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#e5751f"; ctx.lineWidth = 24; ctx.stroke();
+    ctx.fillStyle = "#fff7e8"; ctx.beginPath();
+    ctx.moveTo(80, 64); ctx.lineTo(350, 150); ctx.lineTo(80, 236); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#e5751f"; ctx.beginPath();
+    ctx.moveTo(118, 96); ctx.lineTo(270, 150); ctx.lineTo(118, 204); ctx.closePath(); ctx.fill();
+  });
+}
+
 function buildWarRoom() {
   const FLOOR_Y = ROOM.floorY, ROOM_W = ROOM.width, ROOM_D = ROOM.depth;
-  const WALL_H = ROOM.wallHeight, CEILING_Y = FLOOR_Y + WALL_H;
+  const WALL_H = ROOM.wallHeight, CEILING_Y = FLOOR_Y + WALL_H, WALL_T = 120;
   const sideWallFrame = (side, z, y, w, h, texture) => {
     const frameX = side * (ROOM_W / 2 - 18);
     roomBox(34, h + 54, w + 54, trimWood, frameX, y, z, { cast: true, receive: false });
@@ -231,25 +245,17 @@ function buildWarRoom() {
     art.position.set(frameX - side * 19, y, z); scene.add(art);
   };
 
-  // Floor and a restrained game-room rug establish the table's contact plane.
+  // Bare floor: the room holds the table and wall pieces only, no furniture.
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, ROOM_D), floorWood);
   floor.rotation.x = -Math.PI / 2; floor.position.y = FLOOR_Y; floor.receiveShadow = true; scene.add(floor);
-  const rug = new THREE.Mesh(new THREE.PlaneGeometry(2850, 2850), new THREE.MeshStandardMaterial({ color: 0x5c1831, roughness: 1 }));
-  rug.rotation.x = -Math.PI / 2; rug.position.y = FLOOR_Y + 3; rug.receiveShadow = true; scene.add(rug);
-  const rugInset = new THREE.LineSegments(
-    new THREE.EdgesGeometry(new THREE.BoxGeometry(2660, 3, 2660)),
-    new THREE.LineBasicMaterial({ color: 0xe5751f, transparent: true, opacity: 0.82 }));
-  rugInset.position.y = FLOOR_Y + 7; scene.add(rugInset);
 
-  // Single-sided planes form a complete-looking room; the shared camera safety envelope below
-  // gently keeps both manual and automated camera movement inside them.
-  const plaster = new THREE.MeshStandardMaterial({ color: 0xb7aa94, roughness: 0.96, side: THREE.FrontSide });
-  const wainscot = new THREE.MeshStandardMaterial({ color: 0x3c2920, roughness: 0.85, side: THREE.FrontSide });
-  const backWall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, WALL_H), plaster);
-  backWall.position.set(0, FLOOR_Y + WALL_H / 2, -ROOM_D / 2); backWall.receiveShadow = true; scene.add(backWall);
-  const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_D, WALL_H), plaster);
-  leftWall.rotation.y = Math.PI / 2; leftWall.position.set(-ROOM_W / 2, FLOOR_Y + WALL_H / 2, 0); leftWall.receiveShadow = true; scene.add(leftWall);
-  const rightWall = leftWall.clone(); rightWall.rotation.y = -Math.PI / 2; rightWall.position.x = ROOM_W / 2; scene.add(rightWall);
+  // Solid wall boxes share the same interior planes at x=±ROOM_W/2 and z=-ROOM_D/2.
+  // Their thickness extends outward, so the interior corners meet cleanly with no coplanar overlap.
+  const plaster = new THREE.MeshStandardMaterial({ color: 0xb7aa94, roughness: 0.96 });
+  const wainscot = new THREE.MeshStandardMaterial({ color: 0x3c2920, roughness: 0.85 });
+  roomBox(ROOM_W + WALL_T * 2, WALL_H, WALL_T, plaster, 0, FLOOR_Y + WALL_H / 2, -ROOM_D / 2 - WALL_T / 2);
+  roomBox(WALL_T, WALL_H, ROOM_D, plaster, -ROOM_W / 2 - WALL_T / 2, FLOOR_Y + WALL_H / 2, 0);
+  roomBox(WALL_T, WALL_H, ROOM_D, plaster, ROOM_W / 2 + WALL_T / 2, FLOOR_Y + WALL_H / 2, 0);
   for (const [x, z, ry, w] of [[0, -ROOM_D / 2 + 3, 0, ROOM_W], [-ROOM_W / 2 + 3, 0, Math.PI / 2, ROOM_D], [ROOM_W / 2 - 3, 0, -Math.PI / 2, ROOM_D]]) {
     const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, 1150), wainscot);
     panel.rotation.y = ry; panel.position.set(x, FLOOR_Y + 575, z); panel.receiveShadow = true; scene.add(panel);
@@ -261,9 +267,8 @@ function buildWarRoom() {
     roomBox(45, 54, ROOM_D, trimWood, x, FLOOR_Y + 1150, 0);
   }
 
-  const ceilingMat = new THREE.MeshStandardMaterial({ color: 0xd8cebb, roughness: 0.94, side: THREE.FrontSide });
-  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, ROOM_D), ceilingMat);
-  ceiling.rotation.x = Math.PI / 2; ceiling.position.y = CEILING_Y; ceiling.receiveShadow = true; scene.add(ceiling);
+  const ceilingMat = new THREE.MeshStandardMaterial({ color: 0xd8cebb, roughness: 0.94 });
+  roomBox(ROOM_W, 90, ROOM_D, ceilingMat, 0, CEILING_Y + 45, 0, { cast: false, receive: true });
   for (const x of [-4400, 0, 4400]) roomBox(90, 110, ROOM_D, trimWood, x, CEILING_Y - 55, 0);
   for (const z of [-4200, 0, 4200]) roomBox(ROOM_W, 110, 90, trimWood, 0, CEILING_Y - 55, z);
 
@@ -279,7 +284,7 @@ function buildWarRoom() {
 
   // Intentional wall layout: a large central identity sign, two jerseys, two flags, pennants,
   // and a few smaller photos. The gaps keep the wall collegiate without turning it into a collage.
-  wallFrame(0, 2100, 1280, 560, signTexture("HOKIE WAR ROOM", "STRATEGY • TRADITION • TEAM"));
+  wallFrame(0, 2100, 1280, 560, signTexture("WHERE THE HOKIE AM I?", "FIND YOUR WAY • ASK ANYTHING"));
   wallFrame(-2800, 2050, 520, 650, jerseyTexture("25", "VIRGINIA TECH"));
   wallFrame(2800, 2050, 520, 650, jerseyTexture("7", "HOKIES", "#e5751f", "#861f41"));
   wallFrame(-4650, 2860, 520, 820, signTexture("VT", "EST. 1872", "#861f41", "#e5751f"));
@@ -292,9 +297,19 @@ function buildWarRoom() {
   sideWallFrame(1, 1600, 1600, 620, 360, signTexture("HOME FIELD", "BLACKSBURG, VA", "#3b2a22", "#e5751f"));
   sideWallFrame(-1, -1500, 2300, 900, 440, signTexture("VIRGINIA TECH", "UT PROSIM", "#861f41", "#e5751f"));
 
-  // A low back-wall cabinet adds context without surrounding the table with seating.
-  roomBox(1700, 520, 360, darkWood, 0, FLOOR_Y + 260, -ROOM_D / 2 + 230);
-  for (const x of [-510, 0, 510]) roomBox(12, 430, 370, brassMat, x, FLOOR_Y + 260, -ROOM_D / 2 + 220, { cast: false });
+  // Optional approved mascot asset. Until supplied, the mount shows an original abstract pennant.
+  roomBox(78, 1050, 940, darkWood, -ROOM_W / 2 + 39, 2350, 1500);
+  const mascotAnchor = new THREE.Group();
+  mascotAnchor.position.set(-ROOM_W / 2 + 82, 2350, 1500); mascotAnchor.rotation.y = Math.PI / 2; scene.add(mascotAnchor);
+  const fallback = new THREE.Mesh(new THREE.PlaneGeometry(720, 340), new THREE.MeshStandardMaterial({ map: abstractPennantTexture(), transparent: true, roughness: .9, side: THREE.DoubleSide }));
+  mascotAnchor.add(fallback);
+  new GLTFLoader().load("./assets/models/mascot.glb", ({ scene: mascot }) => {
+    const box = new THREE.Box3().setFromObject(mascot), size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+    const scale = Math.min(760 / Math.max(size.y, 1), 720 / Math.max(size.x, size.z, 1));
+    mascot.scale.setScalar(scale); mascot.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+    mascot.traverse((child) => { if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; } });
+    fallback.visible = false; mascotAnchor.add(mascot);
+  }, undefined, () => { /* The original pennant is the intentional fallback. */ });
 }
 
 buildWarRoom();
@@ -311,60 +326,61 @@ board.position.y = -BOARD_T / 2;
 board.castShadow = board.receiveShadow = true;
 scene.add(board);
 
-// Oversized rails form a substantial frame around (not over) the unchanged 2 km map area.
-for (const z of [-1085, 1085]) roomBox(2260, 205, 170, darkWood, 0, -135, z);
-for (const x of [-1085, 1085]) roomBox(170, 205, 1920, darkWood, x, -135, 0);
-
-function fabricTexture(base) {
-  const canvas = document.createElement("canvas"); canvas.width = 256; canvas.height = 256;
-  const ctx = canvas.getContext("2d"); ctx.fillStyle = base; ctx.fillRect(0, 0, 256, 256);
-  const gradient = ctx.createLinearGradient(0, 0, 256, 0);
-  for (let x = 0; x <= 1; x += .0625) {
-    const shade = Math.round(22 * Math.sin(x * Math.PI * 16));
-    gradient.addColorStop(Math.min(1, x), `rgba(${shade > 0 ? 255 : 0},${shade > 0 ? 255 : 0},${shade > 0 ? 255 : 0},${Math.abs(shade) / 190})`);
-  }
-  ctx.fillStyle = gradient; ctx.fillRect(0, 0, 256, 256);
-  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping; texture.repeat.set(5, 1); return texture;
-}
-const fabricMat = new THREE.MeshStandardMaterial({
-  map: fabricTexture(TABLE_FABRIC_COLOR), color: 0xffffff, roughness: .98, metalness: 0,
-  side: THREE.DoubleSide,
-});
-function fabricSkirt(width, height, x, y, z, rotationY = 0) {
-  const geometry = new THREE.PlaneGeometry(width, height, 48, 8);
-  const pos = geometry.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const px = pos.getX(i), py = pos.getY(i);
-    const fold = Math.sin(px * .035) * 13 + Math.sin(px * .081 + py * .01) * 4;
-    pos.setZ(i, fold);
-  }
+// The frame is ONE extruded ring — a rectangle with a rectangular hole — so the corners are
+// part of the same surface and cannot show seams, gaps or overlapping faces. Separate side
+// pieces were the reason the corners never met.
+const FRAME = { outer: 1190, inner: 1032, depth: 205, top: 6, bevel: 12, bevelT: 10 };
+function tableFrame() {
+  const rect = (half) => [
+    new THREE.Vector2(-half, -half), new THREE.Vector2(half, -half),
+    new THREE.Vector2(half, half), new THREE.Vector2(-half, half),
+  ];
+  const shape = new THREE.Shape(rect(FRAME.outer));
+  shape.holes.push(new THREE.Path(rect(FRAME.inner).reverse()));   // reversed: cuts the hole
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: FRAME.depth, bevelEnabled: true,                        // moulded edge
+    bevelThickness: FRAME.bevelT, bevelSize: FRAME.bevel, bevelOffset: 0, bevelSegments: 3, curveSegments: 1,
+  });
+  geometry.rotateX(-Math.PI / 2);                                  // lay it flat: extrusion becomes +y
   geometry.computeVertexNormals();
-  const skirt = new THREE.Mesh(geometry, fabricMat);
-  skirt.position.set(x, y, z); skirt.rotation.y = rotationY;
-  skirt.castShadow = skirt.receiveShadow = true; scene.add(skirt); return skirt;
-}
-// The skirt starts below the wooden rail so it reads as attached cloth and sits clear of the wood.
-const SKIRT_H = 475, SKIRT_Y = -215 - SKIRT_H / 2;
-fabricSkirt(2060, SKIRT_H, 0, SKIRT_Y, 1178);
-fabricSkirt(2060, SKIRT_H, 0, SKIRT_Y, -1178, Math.PI);
-fabricSkirt(2060, SKIRT_H, 1178, SKIRT_Y, 0, -Math.PI / 2);
-fabricSkirt(2060, SKIRT_H, -1178, SKIRT_Y, 0, Math.PI / 2);
+  // Polished, lightly lacquered walnut: a touch of sheen without turning it into plastic.
+  const polished = new THREE.MeshPhysicalMaterial({
+    map: woodTexture("#5a3823", "#34200f", { planks: 0, repeatX: 6, repeatY: 6, seed: 12 }),
+    roughness: 0.34, metalness: 0.04, clearcoat: 0.55, clearcoatRoughness: 0.3,
+  });
+  const frame = new THREE.Mesh(geometry, polished);
+  frame.userData.tableFrame = "wood";
+  frame.position.y = FRAME.top - FRAME.depth;
+  frame.castShadow = frame.receiveShadow = true;
+  scene.add(frame);
 
-// Four weighty legs and broad feet visibly meet the floor beneath the skirt.
+  // A thin brass pinstripe inlaid along the top face, built the same way (one ring, no corners
+  // to join). It sits a hair proud of the wood so the two surfaces never z-fight.
+  const lineOuter = 1120, lineInner = 1104;
+  const inlay = new THREE.Shape(rect(lineOuter));
+  inlay.holes.push(new THREE.Path(rect(lineInner).reverse()));
+  const INLAY_DEPTH = 4;
+  const inlayGeo = new THREE.ExtrudeGeometry(inlay, { depth: INLAY_DEPTH, bevelEnabled: false, curveSegments: 1 });
+  inlayGeo.rotateX(-Math.PI / 2);
+  const brassInlay = new THREE.Mesh(inlayGeo, new THREE.MeshStandardMaterial({
+    color: 0xd8b36a, roughness: 0.22, metalness: 0.85,
+  }));
+  brassInlay.userData.tableFrame = "brass inlay";
+  // The bevel lifts the wood's real top to FRAME.top + bevelT, so sit the stripe there: mostly
+  // recessed into the wood with a fraction proud, which reads as an inlay and never z-fights.
+  brassInlay.position.y = FRAME.top + FRAME.bevelT + 0.5 - INLAY_DEPTH;
+  brassInlay.castShadow = false; brassInlay.receiveShadow = true;
+  scene.add(brassInlay);
+}
+tableFrame();
+
+// Four weighty legs and broad feet visibly meet the floor beneath the frame.
 for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
   const x = sx * 850, z = sz * 850;
   const leg = roomBox(172, 650, 172, darkWood, x, -515, z);
   leg.rotation.z = -sx * .035; leg.rotation.x = sz * .035;
   roomBox(235, 48, 235, trimWood, sx * 865, -826, sz * 865);
   roomBox(205, 42, 205, brassMat, sx * 838, -192, sz * 838);
-}
-// Brass rim and corner bolts visually seat the interactive campus model inside the tabletop.
-for (const z of [-1013, 1013]) roomBox(2040, 11, 14, brassMat, 0, 5, z, { cast: false });
-for (const x of [-1013, 1013]) roomBox(14, 11, 2040, brassMat, x, 5, 0, { cast: false });
-for (const x of [-988, 988]) for (const z of [-988, 988]) {
-  const bolt = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 7, 18), brassMat);
-  bolt.position.set(x, 8, z); bolt.castShadow = true; scene.add(bolt);
 }
 
 // ---------- Post-processing: tilt-shift + grade ----------
@@ -632,18 +648,37 @@ async function loadData() {
   throw new Error("Map data didn't load. Check your connection, or put a saved vt-campus.json next to this file.");
 }
 
-// ---------- Categories (from OSM tags + name) ----------
+async function loadBuildingClassifications() {
+  try {
+    const response = await fetch("./server/data/building-classifications.json");
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return data?.buildings ?? {};
+  } catch (error) {
+    console.warn("Building classifications are unavailable; uncategorized buildings will remain Other.", error);
+    return {};
+  }
+}
+
+// ---------- Categories (reviewable one-time Gemini classification snapshot) ----------
 const CATEGORIES = ["Academic & admin", "Residence halls", "Dining", "Athletics & recreation", "Libraries", "Parking", "Other"];
-function categoryOf(t) {
-  const n = (t.name || "").toLowerCase(), b = t.building, a = t.amenity;
-  if (/library/.test(n) || a === "library") return "Libraries";
-  if (/dining|market|turner place|food court|cafe/.test(n) || ["restaurant", "cafe", "fast_food", "food_court"].includes(a)) return "Dining";
-  if (["dormitory", "residential", "apartments", "house"].includes(b) || /residence|dorm/.test(n)) return "Residence halls";
-  if (["stadium", "grandstand", "sports_hall", "sports_centre"].includes(b) || t.leisure === "sports_centre"
-      || /stadium|coliseum|arena|field ?house|rec center|natatorium|athletic|ballpark|park$/.test(n)) return "Athletics & recreation";
-  if (b === "parking" || a === "parking" || /parking|garage/.test(n)) return "Parking";
-  if (["university", "college", "school", "office", "public", "civic"].includes(b) || /hall|building|center|lab|institute/.test(n)) return "Academic & admin";
-  return "Other";
+const CLASSIFICATION_LABEL = {
+  academic: "Academic & admin", services: "Academic & admin", residence: "Residence halls",
+  dining: "Dining", athletics: "Athletics & recreation", library: "Libraries", parking: "Parking",
+  arts: "Other", "student-life": "Other", other: "Other",
+};
+function classificationOf(name) {
+  const exact = buildingClassifications[name];
+  if (exact) return exact;
+  const base = String(name ?? "").replace(/\s+\((north|south|east|west|northeast|northwest|southeast|southwest|\d+)\)$/i, "");
+  return buildingClassifications[base] ?? { categories: ["other"], containsDining: false };
+}
+function categoriesOf(name) {
+  const saved = classificationOf(name);
+  const labels = (saved.categories ?? []).map((category) => CLASSIFICATION_LABEL[category] ?? "Other");
+  if (saved.containsDining) labels.push("Dining");
+  const unique = [...new Set(labels)];
+  return unique.length ? unique : ["Other"];
 }
 
 // ---------- Build ----------
@@ -659,8 +694,6 @@ const SPLIT_DIST = 250;  // same-name parts farther than this from every other p
 const MIN_AREA = 4;      // m²; smaller footprints are slivers
 const cleanName = (s) => String(s ?? "").trim().replace(/\s+/g, " ").replace(/[\s.,;:!?\-–—]+$/, "");
 const normName = (s) => cleanName(s).toLowerCase();
-const SPECIFIC = ["Libraries", "Dining", "Residence halls", "Athletics & recreation"];
-
 // Not part of the campus tour: Greek houses (two Greek-letter words, e.g. "Pi Beta Phi"), shops, chains, restaurants
 const GREEK = "alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|omicron|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega";
 const GREEK_HOUSE = new RegExp(`\\b(${GREEK})\\b.*\\b(${GREEK})\\b|fraternity|sorority`, "i");
@@ -810,10 +843,8 @@ function makeBuilding({ parts: all, suffix }) {
   for (const p of parts) votes.set(p.name, (votes.get(p.name) ?? 0) + 1 + p.area * 1e-9);
   const base = [...votes].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 
-  // Category from the largest part, unless some part points to something more specific
-  const catOf = (p) => categoryOf({ ...p.tags, name: p.name }); // name may come from a stadium area
-  let category = catOf(largest);
-  if (!SPECIFIC.includes(category)) category = SPECIFIC.find(c => parts.some(p => catOf(p) === c)) ?? category;
+  const categories = categoriesOf(base && suffix ? `${base} (${suffix})` : base);
+  const category = categories[0];
 
   const [cx, cy] = weightedCentroid(parts);
   const x0 = Math.min(...parts.map(p => p.bbox[0])), y0 = Math.min(...parts.map(p => p.bbox[1]));
@@ -823,7 +854,7 @@ function makeBuilding({ parts: all, suffix }) {
   const group = new THREE.Group();
   const b = {
     id: largest.unit, // stable map object id (the OSM element of the largest part), e.g. "relation/1074686"
-    name: base && suffix ? `${base} (${suffix})` : base, category, parts: [], tags: largest.tags,
+    name: base && suffix ? `${base} (${suffix})` : base, category, categories, parts: [], tags: largest.tags,
     center: new THREE.Vector3(cx, 0, -cy), top: new THREE.Vector3(tx, tallest.height, -ty),
     height: tallest.height, radius: Math.hypot(x1 - x0, y1 - y0) / 2,
     area: parts.reduce((s, p) => s + p.area, 0), group, dropped,
@@ -1159,7 +1190,10 @@ window.overview = () => {
   announce("Virginia Tech, Blacksburg. Showing the whole campus.");
   return "Showing the whole campus.";
 };
-window.listBuildings = () => namedBuildings().map(b => ({ name: b.name, category: b.category })).sort((a, b) => a.name.localeCompare(b.name));
+window.listBuildings = () => namedBuildings().map(b => ({
+  name: b.name, category: b.category, categories: b.categories,
+  x: +b.center.x.toFixed(2), y: +(-b.center.z).toFixed(2),
+})).sort((a, b) => a.name.localeCompare(b.name));
 window.downloadCampusData = () => {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([JSON.stringify(window.__campusData)], { type: "application/json" }));
@@ -1174,31 +1208,6 @@ window.debugBuildings = () => {
                  height: +b.height.toFixed(1), radius: +b.radius.toFixed(1) }));
   console.table(rows); return rows;
 };
-// Project map points (metres, y = north) to screen pixels — used to check that the
-// bird's-eye view really frames the route inside the area the UI panels leave visible.
-window.debugProject = (points) => points.map(([x, y]) => {
-  const v = new THREE.Vector3(x, 1.6, -y).project(camera);
-  return [(v.x * 0.5 + 0.5) * innerWidth, (-v.y * 0.5 + 0.5) * innerHeight];
-});
-
-// Where the flag sits versus the building's real bounds — used to check the marker never
-// sinks into a roof or floats away from it.
-window.debugMarker = (name) => {
-  const b = findBuilding(name);
-  if (!b) return `No building on the map matches "${name}".`;
-  const box = new THREE.Box3().setFromObject(b.group);
-  const spot = markerSpot(b);
-  return {
-    name: b.name, parts: b.parts.length,
-    roofTop: +box.max.y.toFixed(2),
-    storedHeight: +b.height.toFixed(2),
-    flagBase: +spot.y.toFixed(2),
-    roofUnderFlag: +spot.surfaceY.toFixed(2),
-    clearanceAboveRoof: +(spot.y - spot.surfaceY).toFixed(2),
-    offsetFromCentre: +Math.hypot(spot.x - (box.min.x + box.max.x) / 2, spot.z - (box.min.z + box.max.z) / 2).toFixed(2),
-  };
-};
-
 window.debugBuilding = (name) => {
   const b = findBuilding(name);
   if (!b) return `No building on the map matches "${name}".`;
@@ -1217,6 +1226,26 @@ window.debugCamera = () => ({
 });
 // Geometry-only marker check used during development and judging. `roofGap` should always equal
 // MARKER_CLEARANCE, including for scaled and multi-part buildings.
+// Table-frame check: the frame must be a single extruded ring (one mesh, one geometry), which
+// is what guarantees the corners cannot separate. Reports the ring's outer/inner extents.
+window.debugTableFrame = () => {
+  const frames = [];
+  scene.traverse((o) => { if (o.isMesh && o.userData.tableFrame) frames.push(o); });
+  return frames.map((m) => {
+    m.geometry.computeBoundingBox();
+    const b = m.geometry.boundingBox;
+    return {
+      part: m.userData.tableFrame,
+      meshes: frames.length,
+      groups: m.geometry.groups.length,
+      outerX: +b.max.x.toFixed(1), outerZ: +b.max.z.toFixed(1),
+      height: +(b.max.y - b.min.y).toFixed(1),
+      topY: +(b.max.y + m.position.y).toFixed(1),
+      vertices: m.geometry.attributes.position.count,
+    };
+  });
+};
+
 window.debugMarkerSpots = (names = ["Burruss Hall", "Burchard Hall", "Newman Library", "Pritchard Hall", "Lane Stadium"]) =>
   names.map((name) => {
     const b = findBuilding(name);
@@ -1296,7 +1325,8 @@ renderer.setAnimationLoop(() => {
 
 // ---------- Go ----------
 const status = document.getElementById("status");
-loadData().then((data) => {
+Promise.all([loadData(), loadBuildingClassifications()]).then(([data, classifications]) => {
+  buildingClassifications = classifications;
   window.__campusData = data;
   build(data);
   status.remove();
@@ -1311,6 +1341,7 @@ loadData().then((data) => {
     onFrame: (f) => { frameHooks.add(f); return () => frameHooks.delete(f); },
     get selected() { return highlighted; },
   };
+  document.documentElement.dataset.buildingDirectory = JSON.stringify(window.listBuildings());
   // Machine-readable geometry smoke test for the five representative buildings above. This is
   // data only (no marker object is created) and makes regressions easy to spot in browser tests.
   document.documentElement.dataset.markerDiagnostics = JSON.stringify(window.debugMarkerSpots());

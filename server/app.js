@@ -5,7 +5,6 @@ import rateLimit from "express-rate-limit";
 
 import { askGemini, geminiConfigured, geminiModel } from "./lib/gemini.js";
 import { speak, transcribe, speechConfigured, speechModel, transcriptionModel } from "./lib/speech.js";
-import { resolveBuilding } from "./lib/building-resolver.js";
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_MESSAGE_CHARS = Number(process.env.MAX_MESSAGE_CHARS || 1000);
@@ -62,7 +61,9 @@ app.use(cors({
   methods: ["GET", "POST"],
 }));
 
-app.use(express.json({ limit: "32kb" }));
+// The live map sends its exact building directory (names, coordinates and short descriptions)
+// with each guide request, so allow enough room without accepting unbounded request bodies.
+app.use(express.json({ limit: "512kb" }));
 
 app.use("/api/", rateLimit({
   windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000),
@@ -104,33 +105,32 @@ function parseGuideRequest(body) {
       text: turn.text.trim().slice(0, MAX_MESSAGE_CHARS),
     }));
 
-  const context = typeof body.context === "string" ? body.context.trim().slice(0, MAX_CONTEXT_CHARS) : "";
-  const buildings = [...new Set((Array.isArray(body.buildings) ? body.buildings : [])
-    .filter((name) => typeof name === "string")
-    .map((name) => name.trim().slice(0, MAX_CONTEXT_CHARS))
-    .filter(Boolean)
-    .slice(0, MAX_BUILDINGS))];
-  return { message, language, history, context, buildings };
-}
+  const clean = (value, max = MAX_CONTEXT_CHARS) => typeof value === "string" ? value.trim().slice(0, max) : "";
+  const finite = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
+  const buildings = (Array.isArray(body.buildings) ? body.buildings : [])
+    .slice(0, MAX_BUILDINGS)
+    .flatMap((raw) => {
+      const name = clean(typeof raw === "string" ? raw : raw?.name);
+      if (!name) return [];
+      return [{
+        name,
+        x: finite(raw?.x), y: finite(raw?.y),
+        description: clean(raw?.description, 900),
+        tags: raw?.tags && typeof raw.tags === "object" ? raw.tags : {},
+      }];
+    });
+  if (!buildings.length) fail("A non-empty 'buildings' directory is required.");
 
-function locationFailure(language, requested, candidates = null) {
-  const lang = String(language || "en").slice(0, 2).toLowerCase();
-  const choices = candidates?.join(", ");
-  const ambiguous = {
-    en: `I found several close matches. Which one did you mean: ${choices}?`,
-    es: `Encontré varias coincidencias cercanas. ¿Cuál quisiste decir: ${choices}?`,
-    zh: `我找到了几个相近的地点。你指的是哪一个：${choices}？`,
-    hi: `मुझे मिलते-जुलते कई भवन मिले। आपका मतलब इनमें से किससे है: ${choices}?`,
-    ko: `비슷한 건물이 여러 개 있어요. 어느 곳을 말한 건가요: ${choices}?`,
-  };
-  const missing = {
-    en: `I couldn't find “${requested}” in the campus map, so I left the camera where it was.`,
-    es: `No pude encontrar “${requested}” en el mapa del campus, así que dejé la cámara donde estaba.`,
-    zh: `我在校园地图上找不到“${requested}”，所以相机保持在原位。`,
-    hi: `मुझे कैंपस मानचित्र पर “${requested}” नहीं मिला, इसलिए कैमरा वहीं रखा है।`,
-    ko: `캠퍼스 지도에서 “${requested}”을(를) 찾지 못해서 카메라는 그대로 두었어요.`,
-  };
-  return candidates?.length ? (ambiguous[lang] ?? ambiguous.en) : (missing[lang] ?? missing.en);
+  const rawLocation = body.currentLocation;
+  const currentLocation = rawLocation && typeof rawLocation === "object" ? {
+    name: clean(rawLocation.name),
+    x: finite(rawLocation.x),
+    y: finite(rawLocation.y),
+  } : null;
+  const contextJSON = body.studentContext && typeof body.studentContext === "object"
+    ? JSON.stringify(body.studentContext) : "{}";
+  const studentContext = contextJSON.length <= 12000 ? JSON.parse(contextJSON) : {};
+  return { message, language, history, buildings, currentLocation, studentContext };
 }
 
 function parseSpeechRequest(body) {
@@ -144,20 +144,9 @@ function parseSpeechRequest(body) {
 
 app.post("/api/guide", async (req, res, next) => {
   try {
-    const { message, language, history, context, buildings } = parseGuideRequest(req.body);
-    const reply = await askGemini({ message, language, history, context, buildings });
-    let text = reply.text;
-    let action = null;
-    if (reply.action.type === "flyTo") {
-      const resolved = resolveBuilding(reply.action.building, buildings);
-      if (resolved.status === "match") {
-        action = { type: "flyTo", building: resolved.name };
-      } else if (resolved.status === "ambiguous") {
-        text = locationFailure(language, reply.action.building, resolved.candidates);
-      } else {
-        text = locationFailure(language, reply.action.building || message);
-      }
-    }
+    const request = parseGuideRequest(req.body);
+    const reply = await askGemini(request);
+    const { text, action } = reply;
     const { audio, error: speechError } = await speak(text);   // best effort: text still returns
     if (speechError) console.warn(`[speech] Audio unavailable: ${speechError}`);
     res.json({ text, action, audio, speechError });
@@ -226,6 +215,7 @@ app.use((err, _req, res, _next) => {
     gemini_timeout: "The guide took too long to answer. Please try again.",
     gemini_empty: "The guide couldn't come up with an answer. Please try again.",
     gemini_invalid: "The guide returned a response the server couldn't understand. Please try again.",
+    gemini_tool_limit: "The guide used too many campus lookup steps. Please rephrase the question.",
     gemini_bad_model: `The configured Gemini model (${geminiModel()}) is not available.`,
     gemini_bad_key: "The Gemini API key was rejected by the provider.",
     gemini_failed: "Gemini returned an error. Check the guide server log for details.",
@@ -246,12 +236,12 @@ app.listen(PORT, (error) => {
   if (error) {
     const address = `http://localhost:${PORT}`;
     if (error.code === "EADDRINUSE") {
-      console.error(`Cannot start Hokie Guide: port ${PORT} is already in use (${address}).`);
-      console.error(`Another guide server may already be running. Check ${address}/api/health`);
+      console.error(`Cannot start WHERE THE HOKIE AM I? server: port ${PORT} is already in use (${address}).`);
+      console.error(`Another server may already be running. Check ${address}/api/health`);
     } else if (error.code === "EACCES" || error.code === "EPERM") {
-      console.error(`Cannot start Hokie Guide on ${address}: ${error.code} (${error.message}).`);
+      console.error(`Cannot start WHERE THE HOKIE AM I? server on ${address}: ${error.code} (${error.message}).`);
     } else {
-      console.error("Failed to start the Hokie Guide server:", error);
+      console.error("Failed to start WHERE THE HOKIE AM I? server:", error);
     }
     process.exitCode = 1;
     return;
@@ -262,7 +252,7 @@ app.listen(PORT, (error) => {
     console.warn(`  ⚠ GEMINI_TIMEOUT_MS is ${geminiTimeout}ms. Replies often take 7-15s (longer for`);
     console.warn(`    non-Latin scripts), so raise it to 30000 in .env or requests will 504.`);
   }
-  console.log(`Hokie Guide server listening on http://localhost:${PORT}`);
+  console.log(`WHERE THE HOKIE AM I? server listening on http://localhost:${PORT}`);
   console.log(`  CORS origins : ${allowed.join(", ")}${STRICT ? " (strict)" : " + any localhost port (dev; set CORS_STRICT=true to lock down)"}`);
   console.log(`  Gemini       : ${geminiConfigured() ? geminiModel() : "NOT CONFIGURED (set GEMINI_API_KEY)"}`);
   console.log(`  ElevenLabs   : ${speechConfigured() ? speechModel() : "NOT CONFIGURED (set ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID)"}`);

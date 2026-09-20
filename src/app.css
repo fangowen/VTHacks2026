@@ -11,7 +11,12 @@
   --shadow: 0 12px 30px rgba(0, 0, 0, .45);
   --radius: 10px;
   --control-h: 40px;
-  --stencil: "Big Shoulders Stencil Display", Impact, sans-serif;
+  /* Rounded, friendly display face for the title and headings (Fredoka, SIL OFL).
+     The fallbacks carry CJK, Devanagari and Hangul so translated headings still render
+     in a rounded face rather than dropping to a default serif. */
+  --stencil: "Fredoka", "Trebuchet MS", "Hiragino Maru Gothic ProN", "Yu Gothic UI",
+    "Microsoft YaHei UI", "PingFang SC", "Noto Sans CJK SC", "Malgun Gothic", "Apple SD Gothic Neo",
+    "Nirmala UI", "Noto Sans Devanagari", system-ui, sans-serif;
 }
 
 /* An explicit display rule below would otherwise beat the [hidden] attribute */
@@ -28,14 +33,20 @@
   background: linear-gradient(180deg, rgba(28, 23, 20, .96), rgba(28, 23, 20, .86));
   border-bottom: 1px solid rgba(201, 164, 92, .5);
 }
-.hk-brand { display: flex; flex-direction: column; line-height: 1.05; color: var(--card); min-width: 150px; }
-.hk-brand b { font: 700 21px/1 var(--stencil); color: #e5751f; letter-spacing: .02em; }
+.hk-brand { display: flex; flex-direction: column; line-height: 1.1; color: var(--card); min-width: 0; flex: 0 1 auto; }
+/* Scales with the viewport, stays one line on desktop, and wraps evenly when space runs out. */
+.hk-brand b {
+  font-family: var(--stencil); font-weight: 600;
+  font-size: clamp(15px, 0.9vw + 10px, 22px);
+  line-height: 1.08; color: #e5751f; letter-spacing: .01em;
+  white-space: nowrap; text-wrap: balance;
+}
 .hk-brand span { font-size: 11px; color: rgba(235, 226, 203, .72); }
-.hk-tabs { display: flex; gap: 6px; margin: 0 auto; }
+.hk-tabs { display: flex; gap: 6px; margin: 0 auto; flex-wrap: wrap; justify-content: center; min-width: 0; }
 .hk-tab {
-  font: 600 14px "Source Serif 4", Georgia, serif; color: var(--card);
+  font: 600 14px/1.2 "Source Serif 4", Georgia, serif; color: var(--card);
   background: rgba(74, 50, 34, .7); border: 1px solid rgba(201, 164, 92, .6); border-radius: 999px;
-  padding: 6px 16px; cursor: pointer;
+  padding: 6px 14px; cursor: pointer; white-space: nowrap; flex: 0 0 auto;
 }
 .hk-tab:hover { background: #6b452c; }
 .hk-tab[aria-current="true"] { background: #861f41; border-color: #e5751f; }
@@ -53,11 +64,11 @@
 }
 .hk-top .hk-select { background: rgba(74, 50, 34, .7); color: var(--card); border-color: rgba(201, 164, 92, .6); }
 .hk-chip {
-  font: 600 13px "Source Serif 4", Georgia, serif; color: var(--ink); background: rgba(74, 50, 34, .12);
+  font: 600 14px/1.25 "Source Serif 4", Georgia, serif; color: var(--ink); background: rgba(74, 50, 34, .12);
   border: 1px solid rgba(74, 50, 34, .35); border-radius: 999px; padding: 5px 12px; cursor: pointer;
 }
 .hk-chip.on { background: #861f41; color: var(--card); border-color: #e5751f; }
-.hk-chip.tiny { padding: 3px 8px; font-size: 12px; }
+.hk-chip.tiny { padding: 4px 9px; font-size: 14px; min-width: 2.2em; }
 .hk-top .hk-chip { color: var(--card); background: rgba(74, 50, 34, .7); border-color: rgba(201, 164, 92, .6); white-space: nowrap; }
 
 /* ---------- Side panel ---------- */
@@ -139,18 +150,18 @@
 .hk-route-points { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
 .hk-route-points > div { min-width: 0; padding: 7px 9px; border-radius: 8px; background: rgba(74, 50, 34, .1); }
 .hk-route-points span { display: block; font-size: 11px; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
-.hk-route-points b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.hk-route-points b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .hk-route-points.compact { margin: 6px 0 0; }
 .hk-hud-text { font: 600 15px "Source Serif 4", Georgia, serif; margin-bottom: 6px; }
 .hk-bar { height: 6px; background: rgba(74, 50, 34, .2); border-radius: 3px; overflow: hidden; }
 .hk-bar i { display: block; height: 100%; width: 0; background: #e5751f; transition: width .2s linear; }
-.hk-hud-btns { display: flex; gap: 6px; margin-top: 8px; }
+.hk-hud-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
 /* Travel speed slider, in the same parchment/brass language as the rest of the HUD */
 .hk-speed-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-.hk-speed-label { font: 600 13px "Source Serif 4", Georgia, serif; color: #6b452c; white-space: nowrap; min-width: 84px; }
+.hk-speed-label { font: 600 14px "Source Serif 4", Georgia, serif; color: #6b452c; white-space: nowrap; min-width: 92px; }
 .hk-speed { flex: 1; accent-color: #861f41; height: 22px; cursor: pointer; }
-.hk-hud-btn { padding: 5px 12px; font-size: 13px; flex: 1; }
+.hk-hud-btn { padding: 7px 10px; font-size: 14px; flex: 1 1 auto; min-width: max-content; }
 
 /* ---------- Hover tooltip ---------- */
 .hk-tip {
@@ -189,7 +200,7 @@ body.hk-travel-open .hk-chat {
 .hk-speak { position: absolute; top: 5px; right: 5px; padding: 3px 5px; font-size: 11px; background: rgba(74, 50, 34, .15); color: var(--ink); border-color: rgba(74, 50, 34, .25); }
 .hk-msg-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .hk-sugs { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; border-top: 1px solid rgba(74, 50, 34, .15); }
-.hk-sugs .hk-chip { white-space: nowrap; }
+.hk-sugs .hk-chip { white-space: nowrap; flex: 0 0 auto; }
 .hk-chat-form { display: flex; gap: 6px; padding: 8px 12px 12px; border-top: 1px solid rgba(74, 50, 34, .15); }
 .hk-input { flex: 1; font: 15px "Source Serif 4", Georgia, serif; padding: 8px 10px; background: #f6f0e0; color: var(--ink); border: 1px solid rgba(74, 50, 34, .4); border-radius: 6px; }
 .hk-chat-form .hk-icon { background: rgba(74, 50, 34, .12); color: var(--ink); border-color: rgba(74, 50, 34, .3); }
@@ -197,7 +208,7 @@ body.hk-travel-open .hk-chat {
 .hk-mic { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
 .hk-mic.busy { opacity: .7; cursor: wait; }
 .hk-mic-glyph { line-height: 1; }
-.hk-mic-label { font: 600 13px "Source Serif 4", Georgia, serif; }
+.hk-mic-label { font: 600 14px "Source Serif 4", Georgia, serif; }
 .hk-fab {
   position: fixed; right: 14px; bottom: 10px; z-index: 11; display: grid; place-items: center;
   width: 118px; height: 118px; margin: 0; padding: 0; cursor: pointer;

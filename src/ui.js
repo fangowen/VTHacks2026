@@ -40,7 +40,7 @@ export function createUI(ctl) {
   const voiceBtn = el("button", { type: "button", class: "hk-icon", "data-i18n-label": "voice", "data-i18n-title": "voice", onclick: () => toggleSettings() }, "🔊");
 
   const top = el("div", { class: "hk-top" },
-    el("div", { class: "hk-brand" }, el("b", { text: "Hokie War Table" }), el("span", { "data-i18n": "tagline" })),
+    el("div", { class: "hk-brand" }, el("b", { text: "WHERE THE HOKIE AM I?" }), el("span", { "data-i18n": "tagline" })),
     el("nav", { class: "hk-tabs", "data-i18n-label": "primaryNavigation" }, ...tabBtns),
     el("div", { class: "hk-tools" }, accessBtn, voiceBtn));
 
@@ -89,7 +89,6 @@ export function createUI(ctl) {
     el("div", { class: "hk-hud-btns" },
       hudPause,
       el("button", { type: "button", class: "hk-hud-btn", "data-i18n": "skip", onclick: () => ctl.nav.skip() }),
-      el("button", { type: "button", class: "hk-hud-btn", "data-i18n": "recenter", onclick: () => ctl.nav.recenter() }),
       el("button", { type: "button", class: "hk-hud-btn", "data-i18n": "endRoute", onclick: () => ctl.nav.stop() })),
     el("div", { class: "hk-hud-btns" }, viewBtn));
 

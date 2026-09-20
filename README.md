@@ -1,4 +1,4 @@
-# Hokie War Table — personalized campus orientation
+# WHERE THE HOKIE AM I? — personalized campus orientation
 
 A 3D diorama of Virginia Tech's campus with a multilingual AI guide that answers questions,
 walks you to buildings along real campus paths, and builds a personalized first week.
@@ -30,7 +30,7 @@ next to `index.html`.
 | `src/data/campus.js` | Building info, dining, clubs, events, resources, majors and schedules. |
 | `src/routing.js` | Walking graph from the map's OSM paths, A\*, step-free routing. |
 | `src/navigation.js` | Route ribbon, walking guide marker, follow camera, pause/resume/skip/recenter. |
-| `src/ai.js` | Local schedule/recommendation intents plus Gemini's structured building actions. |
+| `src/ai.js` | Sends guide questions and live campus context to Gemini, then applies validated building actions. |
 | `src/api.js` | Client for our backend (`POST /api/guide` and `POST /api/speech`). Uses the page hostname on port 8787, with an optional `window.HOKIE_GUIDE_API_URL` override. |
 | `src/voice.js` | Records click-to-talk audio, sends it to ElevenLabs Scribe, and plays all spoken replies from ElevenLabs. |
 | `server/` | Express backend: Gemini reply + ElevenLabs speech. Holds the API keys. |
@@ -45,7 +45,7 @@ coordinates.
 
 ## Backend (AI features)
 
-The frontend holds no provider keys. The Hokie Guide server in [`server/`](server/README.md)
+The frontend holds no provider keys. WHERE THE HOKIE AM I? server in [`server/`](server/README.md)
 owns them: it sends the student's message to **Gemini**, speaks the reply with **ElevenLabs**,
 and returns both. See `server/README.md` for setup; the short version:
 
@@ -63,15 +63,21 @@ In local development the frontend mirrors its own hostname on port 8787 (`localh
 
 | Endpoint | Request | Response |
 | --- | --- | --- |
-| `POST /api/guide` | `{ message, language, history, context, buildings }` | `{ text, action, audio, speechError }` |
+| `POST /api/guide` | `{ message, language, history, buildings, currentLocation, studentContext }` | `{ text, action, audio, speechError }` |
 | `POST /api/speech` | `{ text, language }` | `{ audio (base64 mp3) }` |
 | `POST /api/transcribe?language=en` | Raw browser audio | `{ text }` |
 | `GET /api/health` | — | `{ ok, gemini, speech }` |
 
-Schedule, dining, study, club and event recommendations can be answered locally. Building-location
-requests use Gemini's multilingual structured action, which the server resolves against the exact
-directory sent by the live map before the frontend flies to it. Spoken replies go through
-ElevenLabs. If the backend is down or unconfigured, captions and the rest of the map keep working.
+WHERE THE HOKIE AM I? gives Gemini validated tools for current location, student context, building search,
+nearest-building ranking, and camera fly-to. The server loads the reviewable classification snapshot,
+resolves every building against the live map directory, and returns only validated actions. Spoken
+replies go through ElevenLabs. If the backend is down, captions explain that the service is unreachable
+while the rest of the map keeps working.
+
+To refresh the saved multi-category building data after changing the OSM snapshot or curated
+descriptions, run `cd server && npm run classify:buildings`. The script sends each on-campus
+building's name, tags, and description to Gemini, preserves entries marked `manualOverride: true`,
+and rewrites `server/data/building-classifications.json` for review.
 
 ## Console API
 

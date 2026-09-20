@@ -1,13 +1,10 @@
-// Gemini text generation via the Interactions API (@google/genai).
-// Stateless: the client sends the recent turns, we replay them as input steps and never store.
-
 import { GoogleGenAI } from "@google/genai";
 import { buildSystemPrompt } from "./prompt.js";
+import { GUIDE_TOOLS, buildCatalog, executeGuideTool } from "./guide-tools.js";
 
-// flash-lite answers these short guide questions in ~5s; the bigger flash models are tuned for
-// long-horizon agentic work and averaged ~9-30s here, which is too slow for a spoken reply.
 const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
-const TIMEOUT_MS = Number(process.env.GEMINI_TIMEOUT_MS || 30000);   // flash models take ~7-15s for a short reply
+const TIMEOUT_MS = Number(process.env.GEMINI_TIMEOUT_MS || 30000);
+const MAX_TOOL_ROUNDS = 8;
 
 let client = null;
 function getClient() {
@@ -19,88 +16,84 @@ function getClient() {
 
 export const geminiConfigured = () => !!process.env.GEMINI_API_KEY;
 
-const step = (role, text) => ({
-  type: role === "assistant" || role === "bot" || role === "model" ? "model_output" : "user_input",
-  content: [{ type: "text", text }],
-});
+function historyForChat(history) {
+  return history.map((turn) => ({
+    role: turn.role === "assistant" || turn.role === "bot" || turn.role === "model" ? "model" : "user",
+    parts: [{ text: turn.text }],
+  }));
+}
 
-/**
- * @param {{message: string, language?: string, history?: {role: string, text: string}[], context?: string, buildings?: string[]}} req
- * @returns {Promise<{text: string, action: {type: "flyTo"|"none", building: string}}>} structured guide reply
- */
-export async function askGemini({ message, language = "en", history = [], context = "", buildings = [] }) {
+function deadline(promise, started) {
+  const remaining = Math.max(1, TIMEOUT_MS - (Date.now() - started));
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(Object.assign(new Error("Gemini timed out"), { status: 504, code: "gemini_timeout" })), remaining);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function providerError(err) {
+  if (err.code === "gemini_timeout" || err.code === "gemini_empty" || err.code === "gemini_tool_limit" || err.code === "bad_request") return err;
+  const status = err?.status ?? err?.code ?? "unknown";
+  console.error(`[gemini] request failed (model=${MODEL}, status=${status}): ${err?.message || err}`);
+  if (err?.response) console.error("[gemini] response:", JSON.stringify(err.response).slice(0, 1000));
+  const badModel = /not found|unsupported|invalid.*model|404/i.test(String(err?.message));
+  const badKey = /api key|unauthenticated|permission|401|403/i.test(String(err?.message));
+  return Object.assign(new Error(err?.message || "Gemini request failed"), {
+    status: 502,
+    code: badModel ? "gemini_bad_model" : badKey ? "gemini_bad_key" : "gemini_failed",
+  });
+}
+
+/** Run one stateless guide request with a server-validated Gemini tool loop. */
+export async function askGemini({ message, language = "en", history = [], buildings = [], currentLocation = null, studentContext = {} }) {
   const ai = getClient();
   if (!ai) throw Object.assign(new Error("Gemini is not configured on this server"), { status: 503, code: "gemini_unconfigured" });
 
-  const input = [...history.map((turn) => step(turn.role, turn.text)), step("user", message)];
+  const state = { catalog: buildCatalog(buildings), currentLocation, studentContext, action: null };
+  if (!state.catalog.length) throw Object.assign(new Error("The live building directory is empty"), { status: 400, code: "bad_request" });
 
-  // The SDK has no per-call timeout, so race it and surface a clean 504 instead of hanging.
-  let timeoutId;
-  const timeout = new Promise((_, reject) => {
-    timeoutId = setTimeout(() => reject(Object.assign(new Error("Gemini timed out"), { status: 504, code: "gemini_timeout" })), TIMEOUT_MS);
+  const functionDeclarations = GUIDE_TOOLS.map(({ type: _type, parameters, ...tool }) => ({
+    ...tool,
+    parametersJsonSchema: parameters,
+  }));
+  const chat = ai.chats.create({
+    model: MODEL,
+    history: historyForChat(history),
+    config: {
+      systemInstruction: buildSystemPrompt({ language }),
+      tools: [{ functionDeclarations }],
+      temperature: 0.2,
+    },
   });
 
-  let interaction;
+  const started = Date.now();
   try {
-    interaction = await Promise.race([
-      ai.interactions.create({
-        model: MODEL,
-        system_instruction: buildSystemPrompt({ language, context, buildings }),
-        store: false,                     // stateless: nothing is kept on Google's side
-        input,
-        generation_config: { thinking_level: "low" },
-        response_format: {
-          type: "text",
-          mime_type: "application/json",
-          schema: {
-            type: "object",
-            additionalProperties: false,
-            required: ["text", "action"],
-            properties: {
-              text: { type: "string" },
-              action: {
-                type: "object",
-                additionalProperties: false,
-                required: ["type", "building"],
-                properties: {
-                  type: { type: "string", enum: ["flyTo", "none"] },
-                  building: { type: "string" },
-                },
-              },
-            },
-          },
-        },
-      }),
-      timeout,
-    ]);
-  } catch (err) {
-    if (err.code === "gemini_timeout") throw err;
-    // Log what Gemini actually said — status, message and body are all useful when debugging
-    const status = err?.status ?? err?.code ?? "unknown";
-    console.error(`[gemini] request failed (model=${MODEL}, status=${status}): ${err?.message || err}`);
-    if (err?.response) console.error("[gemini] response:", JSON.stringify(err.response).slice(0, 500));
-    const badModel = /not found|unsupported|invalid.*model|404/i.test(String(err?.message));
-    const badKey = /api key|unauthenticated|permission|401|403/i.test(String(err?.message));
-    throw Object.assign(new Error(err?.message || "Gemini request failed"), {
-      status: badKey ? 502 : badModel ? 502 : 502,
-      code: badModel ? "gemini_bad_model" : badKey ? "gemini_bad_key" : "gemini_failed",
-    });
-  } finally {
-    clearTimeout(timeoutId);
-  }
+    let response = await deadline(chat.sendMessage({ message }), started);
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const calls = response.functionCalls ?? [];
+      if (!calls.length) {
+        const text = String(response.text ?? "").trim();
+        if (!text) throw Object.assign(new Error("Gemini returned an empty reply"), { status: 502, code: "gemini_empty" });
+        return { text, action: state.action };
+      }
 
-  const output = (interaction?.output_text ?? "").trim();
-  if (!output) throw Object.assign(new Error("Gemini returned an empty reply"), { status: 502, code: "gemini_empty" });
-  try {
-    const result = JSON.parse(output);
-    const text = typeof result?.text === "string" ? result.text.trim() : "";
-    const type = result?.action?.type === "flyTo" ? "flyTo" : "none";
-    const building = typeof result?.action?.building === "string" ? result.action.building.trim() : "";
-    if (!text) throw new Error("Structured reply has no text");
-    return { text, action: { type, building } };
+      const functionResponses = calls.map((call) => {
+        const result = executeGuideTool({ name: call.name, arguments: call.args }, state);
+        console.info(`[guide_tool] ${call.name} ${JSON.stringify(call.args ?? {})} -> ${JSON.stringify(result).slice(0, 600)}`);
+        return {
+          functionResponse: {
+            ...(call.id ? { id: call.id } : {}),
+            name: call.name,
+            response: result?.error ? { error: result } : { output: result },
+          },
+        };
+      });
+      response = await deadline(chat.sendMessage({ message: functionResponses }), started);
+    }
+    throw Object.assign(new Error("Gemini exceeded the tool-call limit"), { status: 502, code: "gemini_tool_limit" });
   } catch (err) {
-    console.error(`[gemini] invalid structured response: ${err.message}; output=${output.slice(0, 500)}`);
-    throw Object.assign(new Error("Gemini returned an invalid structured reply"), { status: 502, code: "gemini_invalid" });
+    throw providerError(err);
   }
 }
 

@@ -1,5 +1,5 @@
 // Animated walking navigation on the existing 3D board: route ribbon, a walking guide
-// marker, the follow camera, and pause / resume / skip / recenter.
+// marker, the follow camera, and pause / resume / skip.
 // The camera deliberately travels at walking pace so the route is learnable.
 
 const RIBBON_W = 5.5, RIBBON_Y = 1.6;
@@ -301,12 +301,6 @@ export function createNavigator(map, hooks = {}) {
     toggle() { if (state) state.paused ? this.resume() : this.pause(); },
     /** Jump to the destination without watching the rest of the walk. */
     skip() { if (state) state.dist = state.total; },
-    recenter() {
-      follow = true;
-      view = "follow"; followOffset = null;
-      hooks.onViewChange?.("follow");
-      if (state) centerOnBird(positionAt(state.dist));
-    },
     /** Switch between following the bird and a bird's-eye view of the whole route. */
     setView(next) { return setView(next); },
     toggleView() { return setView(view === "follow" ? "overview" : "follow"); },

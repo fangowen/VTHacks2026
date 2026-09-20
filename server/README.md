@@ -1,6 +1,6 @@
-# Hokie Guide server
+# WHERE THE HOKIE AM I? server
 
-Backend for the campus guide. It asks **Gemini** for open-ended replies and routes every app
+Backend for WHERE THE HOKIE AM I?. It asks **Gemini** for open-ended replies and routes every app
 text-to-speech request—including Listen buttons and navigation prompts—through **ElevenLabs**.
 
 API keys live only in `server/.env` and never reach the browser.
@@ -86,8 +86,12 @@ but changing the shell default keeps `node`, `npm`, and editor terminals consist
     { "role": "user", "text": "Hi" },
     { "role": "assistant", "text": "Hi! How can I help?" }
   ],
-  "context": "Dietrick Hall",                             // optional: selected building
-  "buildings": ["Burruss Hall", "Newman Library"]        // exact live map directory
+  "currentLocation": { "name": "Burruss Hall", "x": 22.4, "y": -84.1 },
+  "studentContext": { "selectedBuilding": "Burruss Hall", "profile": { "major": "Computer Science" } },
+  "buildings": [                                           // exact live map directory
+    { "name": "Burruss Hall", "x": 22.4, "y": -84.1, "description": "…", "tags": {} },
+    { "name": "Newman Library", "x": 105.2, "y": -34.9, "description": "…", "tags": {} }
+  ]
 }
 ```
 
@@ -127,28 +131,9 @@ Errors are always JSON: `{ "error": "…" }` with `400` (bad input), `403` (orig
 ## Testing
 
 ```bash
-npm run test:guide     # English, Spanish and Chinese, with a building context
+npm run test:guide     # Tool-driven dining, study, location and non-movement cases
 npm run test:buildings # exact, alias, fuzzy, ambiguous and missing-name resolution
-```
-
-Or with curl:
-
-```bash
-curl -s localhost:8787/api/health
-
-# English
-curl -s localhost:8787/api/guide -H 'Content-Type: application/json' \
-  -d '{"message":"What is a Hokie, and what are office hours?","language":"en"}' | head -c 400
-
-# Spanish, with the selected building as context
-curl -s localhost:8787/api/guide -H 'Content-Type: application/json' \
-  -d '{"message":"¿Qué puedo comer cerca de aquí?","language":"es","context":"Dietrick Hall"}' | head -c 400
-
-# Chinese, with conversation history
-curl -s localhost:8787/api/guide -H 'Content-Type: application/json' \
-  -d '{"message":"那里几点开门？","language":"zh","context":"Newman Library",
-       "history":[{"role":"user","text":"新生应该先去图书馆做什么？"},
-                  {"role":"assistant","text":"Newman Library 是校园的主图书馆。"}]}' | head -c 400
+npm run classify:buildings # refresh the reviewable Gemini category snapshot
 ```
 
 To hear the audio from a curl response:
@@ -163,11 +148,13 @@ open reply.mp3
 ## How it works
 
 - `index.js` — Express app: CORS allowlist, JSON body cap, per-IP rate limit, validation, routes.
-- `lib/prompt.js` — the guide's persona: reply in the student's language, keep building names in
-  English, explain American campus customs, never give turn-by-turn directions, never invent facts.
-- `lib/buildings.js` — imports the frontend's curated campus data (`src/data/campus.js`) so the
-  guide is grounded in the same building facts the map shows.
+- `lib/prompt.js` — WHERE THE HOKIE AM I? persona and rules for language, tool use, camera movement,
+  American campus context, and grounded answers.
+- `lib/guide-tools.js` — validated current-location, student-context, building search, proximity,
+  and fly-to tools backed by the live frontend directory.
+- `data/building-classifications.json` — reviewable, hand-correctable multi-category snapshot.
+- `scripts/classify-buildings.mjs` — one-time Gemini classifier using OSM tags and curated descriptions.
 - `lib/building-resolver.js` and `lib/building-aliases.js` — resolve Gemini's requested place
   against the exact live directory supplied by the frontend, without a second building list.
-- `lib/gemini.js` — stateless Interactions API call with schema-constrained text + map action.
+- `lib/gemini.js` — stateless Gemini function-calling loop; only validated `fly_to` calls become actions.
 - `lib/speech.js` — ElevenLabs text-to-speech, returns base64 MP3 or `null` on failure.

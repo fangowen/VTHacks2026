@@ -190,7 +190,7 @@ export function startApp(map, data) {
   // ---------- UI wiring ----------
   ui = createUI({
     places,
-    categories: () => [...map.CATEGORIES, "Landmarks"].filter((c) => places.all().some((p) => p.category === c)),
+    categories: () => [...map.CATEGORIES, "Landmarks"].filter((c) => places.all().some((p) => (p.categories ?? [p.category]).includes(c))),
     profile: () => profile,
     itinerary: () => (week ??= generateWeek(ctx())),
     recommendations: () => recommendAll(ctx()),
@@ -203,7 +203,7 @@ export function startApp(map, data) {
     send,
     speak,
     nav: {
-      toggle: () => nav.toggle(), skip: () => nav.skip(), recenter: () => nav.recenter(),
+      toggle: () => nav.toggle(), skip: () => nav.skip(),
       stop: () => { nav.stop(); ui.hideHud(); },
       setSpeed: (factor) => nav.setSpeed(factor),
       getSpeed: () => nav.getSpeed(),
@@ -323,5 +323,5 @@ export function startApp(map, data) {
     setStart: (name) => { const p = places.find(name); if (p) setStart(p); return p?.name ?? null; },
     destination: () => destination?.name ?? null,
   };
-  console.log(`Hokie Guide ready — ${places.all().length} places, ${graph.nodeCount} path nodes. Try window.hokie.ask("take me to my next class").`);
+  console.log(`WHERE THE HOKIE AM I? is ready — ${places.all().length} places, ${graph.nodeCount} path nodes. Try window.hokie.ask("take me to my next class").`);
 }

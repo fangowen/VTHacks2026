@@ -53,6 +53,6 @@ if (major < MIN_MAJOR) {
 }
 
 import("./app.js").catch((err) => {
-  console.error("Failed to start the Hokie Guide server:\n", err);
+  console.error("Failed to start WHERE THE HOKIE AM I? server:\n", err);
   process.exit(1);
 });

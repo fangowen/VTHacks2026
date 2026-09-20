@@ -1,5 +1,5 @@
 {
-  "name": "hokie-war-table",
+  "name": "the-hokie-table",
   "version": "1.0.0",
   "private": true,
   "description": "3D Virginia Tech campus map with a multilingual orientation guide. No build step: index.html loads src/*.js directly.",
