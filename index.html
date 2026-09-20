@@ -1,0 +1,985 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hokie War Table</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --room: #1c1714;
+    --walnut: #4a3222;
+    --brass: #c9a45c;
+    --parchment: #ebe2cb;
+    --ink: #2b211a;
+    --maroon: #861f41;
+    --orange: #e5751f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--room); }
+  body { font-family: "Source Serif 4", Georgia, serif; color: var(--ink); }
+  canvas { display: block; }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+    overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+  }
+
+  .status {
+    position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none;
+    font-family: "Big Shoulders Stencil Display", Impact, sans-serif; font-size: 28px; color: var(--brass);
+    text-align: center; padding: 24px;
+  }
+  .status small { display: block; font: 15px/1.5 "Source Serif 4", Georgia, serif; color: var(--parchment); margin-top: 8px; max-width: 46ch; }
+
+</style>
+<link rel="stylesheet" href="./src/app.css" />
+</head>
+<body>
+<p class="sr-only" id="srStatus" role="status" aria-live="polite"></p>
+
+
+<div class="status" id="status">Surveying campus…</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+// ---------- Config ----------
+const CENTER = { lat: 37.2255, lon: -80.4234 };   // centered on main campus
+const HALF = 1000;                                 // board half-size in meters (2 km square: Drillfield to Vet Med)
+const CAMPUS_NAME = "Virginia Tech";               // OSM amenity=university area; only buildings inside it are shown
+const HEIGHT_EXAGGERATION = 1.3;                   // taller buildings read better as a model
+const COLORS = {
+  room: 0x1c1714, walnut: 0x4a3222, ground: 0xe4dcc8, grass: 0x9dbb74, park: 0xb3c98a,
+  road: 0xb9b0a0, path: 0xf6f1e6, water: 0x8db4c6,
+  wall: 0xd4cab8, roof: 0xf0eadf, maroon: 0x861f41, orange: 0xe5751f,
+};
+
+// ---------- Projection (lat/lon -> local meters; +x east, -z north) ----------
+const M_LAT = 110540, M_LON = 111320 * Math.cos(CENTER.lat * Math.PI / 180);
+const toXY = (p) => [(p.lon - CENTER.lon) * M_LON, (p.lat - CENTER.lat) * M_LAT]; // y = north
+const inside = ([x, y], pad = 0) => Math.abs(x) <= HALF - pad && Math.abs(y) <= HALF - pad;
+
+// ---------- Renderer / scene ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(COLORS.room);
+
+// Narrow FOV + far camera = flatter perspective, which reads as "looking at a model"
+const camera = new THREE.PerspectiveCamera(22, innerWidth / innerHeight, 10, 30000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.075;
+controls.zoomSpeed = 0.85;
+controls.maxPolarAngle = Math.PI * 0.42;
+// Keep the camera close enough to read the diorama, but never so close that roofs clip or so
+// far away that the campus becomes a postage stamp. These limits apply to wheel, pinch, and UI.
+controls.minDistance = 360;
+controls.maxDistance = 7200;
+controls.autoRotate = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+controls.autoRotateSpeed = 0.35;
+const HOME = { target: new THREE.Vector3(0, 0, 0), dist: 5500, polar: 0.95, az: -0.6 };
+placeCamera(HOME.target, HOME.dist, HOME.polar, HOME.az);
+
+scene.add(new THREE.HemisphereLight(0xfff4e0, 0x5a4a3a, 1.1));
+const sun = new THREE.DirectionalLight(0xffe6c4, 2.4);
+sun.position.set(-1500, 2300, 1150);
+sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096);
+Object.assign(sun.shadow.camera, { left: -HALF - 100, right: HALF + 100, top: HALF + 100, bottom: -HALF - 100, near: 100, far: 7000 });
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.6;
+scene.add(sun);
+
+// ---------- Board (the diorama slab) ----------
+const BOARD_T = 60;
+const board = new THREE.Mesh(
+  new THREE.BoxGeometry(HALF * 2 + 40, BOARD_T, HALF * 2 + 40),
+  [ // +x, -x, +y (top), -y, +z, -z
+    mat(COLORS.walnut, 0.7), mat(COLORS.walnut, 0.7), mat(COLORS.ground, 1),
+    mat(COLORS.walnut, 0.7), mat(COLORS.walnut, 0.7), mat(COLORS.walnut, 0.7),
+  ]
+);
+board.position.y = -BOARD_T / 2;
+board.receiveShadow = true;
+scene.add(board);
+
+// ---------- Post-processing: tilt-shift + grade ----------
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const tiltShader = (dir) => ({
+  uniforms: {
+    tDiffuse: { value: null }, dir: { value: new THREE.Vector2(...dir) },
+    resolution: { value: new THREE.Vector2() }, focus: { value: 0.5 }, band: { value: 0.1 }, maxBlur: { value: 9 },
+  },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform vec2 dir, resolution; uniform float focus, band, maxBlur; varying vec2 vUv;
+    void main(){
+      float amt = smoothstep(band, band + 0.35, abs(vUv.y - focus)) * maxBlur;
+      vec4 sum = vec4(0.0); float wsum = 0.0;
+      for (int i = -6; i <= 6; i++) {
+        float f = float(i); float w = exp(-f * f / 18.0);
+        sum += texture2D(tDiffuse, vUv + dir * f * (amt / 6.0) / resolution) * w; wsum += w;
+      }
+      gl_FragColor = sum / wsum;
+    }`,
+});
+const blurH = new ShaderPass(tiltShader([1, 0]));
+const blurV = new ShaderPass(tiltShader([0, 1]));
+const grade = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, sat: { value: 1.25 }, vig: { value: 0.35 } },
+  vertexShader: tiltShader([0, 0]).vertexShader,
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float sat, vig; varying vec2 vUv;
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+      c.rgb = mix(vec3(l), c.rgb, sat);
+      float d = distance(vUv, vec2(0.5));
+      c.rgb *= 1.0 - vig * smoothstep(0.35, 0.85, d);
+      gl_FragColor = c;
+    }`,
+});
+composer.addPass(blurH); composer.addPass(blurV); composer.addPass(grade); composer.addPass(new OutputPass());
+
+function resize() {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
+  const pr = renderer.getPixelRatio();
+  for (const p of [blurH, blurV]) p.uniforms.resolution.value.set(innerWidth * pr, innerHeight * pr);
+}
+addEventListener("resize", resize); resize();
+
+// ---------- Helpers ----------
+function mat(color, rough = 0.9) { return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0 }); }
+
+// Screen-reader announcement for the current selection (replaces the old on-screen placard)
+function announce(text) { document.getElementById("srStatus").textContent = text; }
+
+function placeCamera(target, dist, polar, az) {
+  controls.target.copy(target);
+  camera.position.set(
+    target.x + dist * Math.sin(polar) * Math.sin(az),
+    target.y + dist * Math.cos(polar),
+    target.z + dist * Math.sin(polar) * Math.cos(az)
+  );
+  controls.update();
+}
+
+// Project a ring to meters, dropping consecutive duplicate points and the closing duplicate
+function cleanRing(geom) {
+  const pts = [], same = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]) < 0.01;
+  for (const p of geom.map(toXY)) if (!pts.length || !same(p, pts[pts.length - 1])) pts.push(p);
+  while (pts.length > 1 && same(pts[0], pts[pts.length - 1])) pts.pop();
+  return pts;
+}
+
+// A multipolygon ring can be split across several member ways: chain them end to end until closed
+function joinRings(ways) {
+  const same = (a, b) => a.lat === b.lat && a.lon === b.lon;
+  const open = ways.filter(w => w.length > 1).map(w => w.slice()), rings = [];
+  while (open.length) {
+    let ring = open.shift();
+    for (let grew = true; grew && !same(ring[0], ring[ring.length - 1]); ) {
+      grew = false;
+      for (let i = 0; i < open.length; i++) {
+        const w = open[i], end = ring[ring.length - 1];
+        if (same(end, w[0])) ring = ring.concat(w.slice(1));
+        else if (same(end, w[w.length - 1])) ring = ring.concat(w.slice(0, -1).reverse());
+        else continue;
+        open.splice(i, 1); grew = true; break;
+      }
+    }
+    rings.push(ring); // a ring that never closes is closed implicitly, as before
+  }
+  return rings;
+}
+
+// Collect polygons (outer + holes) from a way or multipolygon relation
+function polygonsOf(el) {
+  if (el.type === "way" && el.geometry) return [{ outer: cleanRing(el.geometry), holes: [] }];
+  if (el.type === "relation" && el.members) {
+    const rings = (inner) => joinRings(el.members.filter(m => m.geometry && (m.role === "inner") === inner).map(m => m.geometry)).map(cleanRing);
+    const outers = rings(false), inners = rings(true);
+    // Each hole goes to the outer ring that contains it
+    return outers.map((outer, i) => ({ outer, holes: inners.filter(h => h.length && outers.findIndex(o => pointInPoly(h[0], o)) === i) }));
+  }
+  return [];
+}
+
+// Area, area-weighted centroid and bounding box of a polygon (holes subtracted); y = north
+function polyStats({ outer, holes }) {
+  const ring = (pts) => {
+    let a = 0, cx = 0, cy = 0;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const f = pts[j][0] * pts[i][1] - pts[i][0] * pts[j][1];
+      a += f; cx += (pts[j][0] + pts[i][0]) * f; cy += (pts[j][1] + pts[i][1]) * f;
+    }
+    a /= 2; // signed; the centroid formula works for either winding
+    if (Math.abs(a) < 1e-9) return { a: 0, cx: 0, cy: 0 };
+    return { a: Math.abs(a), cx: cx / (6 * a), cy: cy / (6 * a) };
+  };
+  const o = ring(outer), hs = holes.filter(h => h.length >= 3).map(ring);
+  let area = o.a, sx = o.a * o.cx, sy = o.a * o.cy;
+  for (const h of hs) { area -= h.a; sx -= h.a * h.cx; sy -= h.a * h.cy; }
+  const xs = outer.map(p => p[0]), ys = outer.map(p => p[1]);
+  const bbox = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  if (area <= 1e-6) return { area: 0, cx: (bbox[0] + bbox[2]) / 2, cy: (bbox[1] + bbox[3]) / 2, bbox };
+  return { area, cx: sx / area, cy: sy / area, bbox };
+}
+
+// A point on the roof: the centroid if it's inside, else the middle of the widest span on the centroid's row
+function interiorPoint(poly, [x, y]) {
+  if (pointInPoly([x, y], poly.outer) && !poly.holes.some(h => pointInPoly([x, y], h))) return [x, y];
+  const xs = [];
+  for (const r of [poly.outer, ...poly.holes]) for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+    const [xi, yi] = r[i], [xj, yj] = r[j];
+    if ((yi > y) !== (yj > y)) xs.push(xi + (y - yi) * (xj - xi) / (yj - yi));
+  }
+  xs.sort((a, b) => a - b);
+  let best = null; // crossings pair up into inside spans (even–odd rule)
+  for (let i = 0; i + 1 < xs.length; i += 2) if (!best || xs[i + 1] - xs[i] > best[1] - best[0]) best = [xs[i], xs[i + 1]];
+  return best ? [(best[0] + best[1]) / 2, y] : [x, y];
+}
+
+function toShape({ outer, holes }) {
+  const s = new THREE.Shape(outer.map(([x, y]) => new THREE.Vector2(x, y)));
+  for (const h of holes) if (h.length >= 3) s.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y))));
+  return s;
+}
+
+function heightOf(tags, area) {
+  let h = parseFloat(tags.height);
+  if (!(h > 0) && tags["building:levels"]) h = parseFloat(tags["building:levels"]) * 3.4 + 2;
+  if (!(h > 0)) {
+    const t = tags.building;
+    h = ({ university: 15, college: 15, school: 12, dormitory: 17, residential: 14, apartments: 16,
+           house: 7, garage: 4, garages: 4, shed: 3, hut: 3, roof: 5, stadium: 22, grandstand: 18 })[t] ?? 11;
+    if (area < 80) h = Math.min(h, 5);
+  }
+  return h * HEIGHT_EXAGGERATION;
+}
+
+// Flat ground polygons (grass, water, etc.) merged into one mesh per color
+function flatLayer(polys, color, y) {
+  if (!polys.length) return;
+  const geoms = polys.map(p => new THREE.ShapeGeometry(toShape(p)));
+  const merged = mergeFlat(geoms);
+  merged.rotateX(-Math.PI / 2);
+  const m = new THREE.Mesh(merged, mat(color));
+  m.position.y = y; m.receiveShadow = true; scene.add(m);
+}
+function mergeFlat(geoms) {
+  const pos = [], idx = []; let off = 0;
+  for (const g of geoms) {
+    const p = g.attributes.position.array; for (let i = 0; i < p.length; i++) pos.push(p[i]);
+    const ix = g.index ? g.index.array : [...Array(p.length / 3).keys()];
+    for (const i of ix) idx.push(i + off);
+    off += p.length / 3; g.dispose();
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  out.setIndex(idx); out.computeVertexNormals();
+  return out;
+}
+
+// Roads and paths as flat ribbons, one mesh per style
+function ribbonLayer(lines, color, y) {
+  const pos = [], idx = []; let base = 0;
+  for (const { pts, w } of lines) {
+    if (pts.length < 2) continue;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i], a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+      let dx = b[0] - a[0], dy = b[1] - a[1]; const len = Math.hypot(dx, dy) || 1; dx /= len; dy /= len;
+      const nx = -dy * w / 2, ny = dx * w / 2;
+      pos.push(p[0] + nx, y, -(p[1] + ny), p[0] - nx, y, -(p[1] - ny));
+      if (i > 0) { const k = base + (i - 1) * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+    }
+    base += pts.length * 2;
+  }
+  if (!pos.length) return;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, roughness: 1, side: THREE.DoubleSide }));
+  m.receiveShadow = true; scene.add(m);
+}
+
+// Clip a polyline to the board edge, splitting it into runs that stay on the board
+function clipLine(pts) {
+  const L = HALF - 4, runs = []; let cur = [];
+  const clipSeg = (a, b) => { // Liang–Barsky against the square [-L, L]
+    let t0 = 0, t1 = 1; const dx = b[0] - a[0], dy = b[1] - a[1];
+    for (const [p, q] of [[-dx, a[0] + L], [dx, L - a[0]], [-dy, a[1] + L], [dy, L - a[1]]]) {
+      if (p === 0) { if (q < 0) return null; continue; }
+      const r = q / p; if (p < 0) { if (r > t1) return null; t0 = Math.max(t0, r); } else { if (r < t0) return null; t1 = Math.min(t1, r); }
+    }
+    return [[a[0] + t0 * dx, a[1] + t0 * dy], [a[0] + t1 * dx, a[1] + t1 * dy], t0 > 0, t1 < 1];
+  };
+  for (let i = 1; i < pts.length; i++) {
+    const c = clipSeg(pts[i - 1], pts[i]);
+    if (!c) { if (cur.length > 1) runs.push(cur); cur = []; continue; }
+    const [a, b, cutStart, cutEnd] = c;
+    if (cutStart || !cur.length) { if (cur.length > 1) runs.push(cur); cur = [a]; }
+    cur.push(b);
+    if (cutEnd) { runs.push(cur); cur = []; }
+  }
+  if (cur.length > 1) runs.push(cur);
+  return runs;
+}
+
+function pointInPoly([x, y], poly) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+  }
+  return c;
+}
+
+// ---------- Data ----------
+const ROAD_W = { motorway: 14, trunk: 12, primary: 11, secondary: 10, tertiary: 9, residential: 7, unclassified: 7,
+  service: 4.5, living_street: 6, pedestrian: 6, footway: 2.6, path: 2.2, cycleway: 2.6, steps: 2.6, track: 3 };
+
+async function loadData() {
+  try { // Prefer a saved snapshot: reliable offline and at judging
+    const r = await fetch("./vt-campus.json"); if (r.ok) return await r.json();
+  } catch {}
+  const s = CENTER.lat - HALF / M_LAT, n = CENTER.lat + HALF / M_LAT;
+  const w = CENTER.lon - HALF / M_LON, e = CENTER.lon + HALF / M_LON;
+  const bb = `(${s},${w},${n},${e})`;
+  const q = `[out:json][timeout:60];(
+    way["building"]${bb}; relation["building"]${bb};
+    way["leisure"~"^(park|pitch|garden|common|stadium|track)$"]${bb};
+    way["landuse"~"^(grass|recreation_ground|meadow|forest|village_green)$"]${bb};
+    way["natural"~"^(wood|grassland|scrub|water)$"]${bb};
+    way["highway"]${bb}; node["natural"="tree"]${bb};
+    relation["amenity"="university"]["name"="${CAMPUS_NAME}"]${bb}; way["amenity"="university"]["name"="${CAMPUS_NAME}"]${bb};
+  );out geom;`;
+  for (const url of ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]) {
+    try {
+      const r = await fetch(url, { method: "POST", body: "data=" + encodeURIComponent(q) });
+      if (r.ok) return await r.json();
+    } catch {}
+  }
+  throw new Error("Map data didn't load. Check your connection, or put a saved vt-campus.json next to this file.");
+}
+
+// ---------- Categories (from OSM tags + name) ----------
+const CATEGORIES = ["Academic & admin", "Residence halls", "Dining", "Athletics & recreation", "Libraries", "Parking", "Other"];
+function categoryOf(t) {
+  const n = (t.name || "").toLowerCase(), b = t.building, a = t.amenity;
+  if (/library/.test(n) || a === "library") return "Libraries";
+  if (/dining|market|turner place|food court|cafe/.test(n) || ["restaurant", "cafe", "fast_food", "food_court"].includes(a)) return "Dining";
+  if (["dormitory", "residential", "apartments", "house"].includes(b) || /residence|dorm/.test(n)) return "Residence halls";
+  if (["stadium", "grandstand", "sports_hall", "sports_centre"].includes(b) || t.leisure === "sports_centre"
+      || /stadium|coliseum|arena|field ?house|rec center|natatorium|athletic|ballpark|park$/.test(n)) return "Athletics & recreation";
+  if (b === "parking" || a === "parking" || /parking|garage/.test(n)) return "Parking";
+  if (["university", "college", "school", "office", "public", "civic"].includes(b) || /hall|building|center|lab|institute/.test(n)) return "Academic & admin";
+  return "Other";
+}
+
+// ---------- Build ----------
+// One record per real-world building. Each OSM polygon is a "part" (a child mesh of b.group):
+// { name, category, parts: Mesh[], tags, center: Vector3, top: Vector3 (flag spot), height, radius, area, group, dropped }
+const buildings = [], partMeshes = [], areas = [];
+const wallMat = mat(COLORS.wall), roofMat = mat(COLORS.roof, 0.8);
+const hiWall = mat(COLORS.maroon, 0.7), hiRoof = mat(COLORS.orange, 0.7);
+const baseMats = [roofMat, wallMat], hiMats = [hiRoof, hiWall];
+const hoverMats = [mat(0xf7dcc4, 0.8), mat(0xc98a8f, 0.8)]; // soft maroon/orange tint for hover
+
+const SPLIT_DIST = 250;  // same-name parts farther than this from every other part are a separate building
+const MIN_AREA = 4;      // m²; smaller footprints are slivers
+const cleanName = (s) => String(s ?? "").trim().replace(/\s+/g, " ").replace(/[\s.,;:!?\-–—]+$/, "");
+const normName = (s) => cleanName(s).toLowerCase();
+const SPECIFIC = ["Libraries", "Dining", "Residence halls", "Athletics & recreation"];
+
+// Not part of the campus tour: Greek houses (two Greek-letter words, e.g. "Pi Beta Phi"), shops, chains, restaurants
+const GREEK = "alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|omicron|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega";
+const GREEK_HOUSE = new RegExp(`\\b(${GREEK})\\b.*\\b(${GREEK})\\b|fraternity|sorority`, "i");
+const excluded = (t, name) => GREEK_HOUSE.test(name) || !!t.shop || !!t.brand
+  || (["restaurant", "fast_food", "bar", "pub", "cafe"].includes(t.amenity) && !["university", "college", "dormitory"].includes(t.building));
+
+function build(data) {
+  const grass = [], park = [], water = [], treeNodes = [];
+  const roads = [], paths = [], parts = [];
+
+  // First pass: the campus boundary decides which buildings are kept; named stadium areas
+  // lend their name to the unnamed stands inside them (Lane Stadium's stands have no name of their own)
+  const campus = [], stadiums = [];
+  for (const el of data.elements) {
+    const t = el.tags || {};
+    if (t.amenity === "university" && t.name === CAMPUS_NAME) campus.push(...polygonsOf(el));
+    else if (t.leisure === "stadium" && t.name && !t.building) for (const poly of polygonsOf(el)) stadiums.push({ name: t.name, poly });
+    // Named open spaces (the Drillfield, the quads) are landmarks for directions and the assistant
+    if (!t.building && t.name && (t.leisure === "park" || t.leisure === "stadium" || t.landuse === "grass"))
+      for (const poly of polygonsOf(el)) if (poly.outer.length >= 3 && poly.outer.every(p => inside(p, 1))) {
+        const s = polyStats(poly);
+        areas.push({ id: `${el.type}/${el.id}`, name: t.name, poly, area: s.area, center: new THREE.Vector3(s.cx, 0, -s.cy), radius: Math.hypot(s.bbox[2] - s.bbox[0], s.bbox[3] - s.bbox[1]) / 2 });
+      }
+  }
+  if (!campus.length) console.warn(`No "${CAMPUS_NAME}" campus boundary in the map data; showing every named building on the board.`);
+
+  for (const el of data.elements) {
+    const t = el.tags || {};
+    if (el.type === "node" && t.natural === "tree") { const p = toXY(el); if (inside(p, 5)) treeNodes.push(p); continue; }
+    if (t.amenity === "university" && t.name === CAMPUS_NAME) continue; // the boundary itself isn't drawn
+
+    if (t.building) {
+      const polys = polygonsOf(el), unit = `${el.type}/${el.id}`;
+      polys.forEach((poly, i) => {
+        if (new Set(poly.outer.map(p => p.join())).size < 3 || !poly.outer.every(p => inside(p, 2))) return;
+        const s = polyStats(poly);
+        if (s.area < MIN_AREA) return;
+        parts.push({ unit, osmId: polys.length > 1 ? `${unit} ring ${i + 1}` : unit, poly, tags: t, ...s, height: heightOf(t, s.area) });
+      });
+      continue;
+    }
+
+    if (el.type === "way" && t.highway && el.geometry) {
+      const w = ROAD_W[t.highway]; if (!w || /construction|proposed/.test(t.highway)) continue;
+      const list = w < 4 ? paths : roads;
+      for (const run of clipLine(el.geometry.map(toXY))) list.push({ pts: run, w });
+      continue;
+    }
+
+    const bucket = t.natural === "water" ? water
+      : (t.leisure === "pitch" || t.leisure === "stadium" || t.leisure === "track") ? park
+      : (t.leisure || t.landuse || t.natural) ? grass : null;
+    if (bucket) for (const poly of polygonsOf(el)) if (poly.outer.length >= 3 && poly.outer.every(p => inside(p, 1))) bucket.push(poly);
+  }
+
+  groupBuildings(parts, campus, stadiums);
+  flatLayer(grass, COLORS.grass, 0.3);
+  flatLayer(park, COLORS.park, 0.45);
+  flatLayer(water, COLORS.water, 0.5);
+  ribbonLayer(roads, COLORS.road, 0.7);
+  ribbonLayer(paths, COLORS.path, 0.9);
+  plantTrees(treeNodes, grass);
+}
+
+// ---------- Grouping parts into buildings ----------
+function groupBuildings(parts, campus, stadiums) {
+  const push = (map, k, v) => (map.get(k) ?? map.set(k, []).get(k)).push(v);
+  const within = (pt, poly) => pointInPoly(pt, poly.outer) && !poly.holes.some(h => pointInPoly(pt, h));
+  const onCampus = (pt) => !campus.length || campus.some(poly => within(pt, poly));
+
+  // 1. A "unit" is every ring of one OSM element, so a multipolygon's outers stay together
+  const units = new Map();
+  for (const p of parts) push(units, p.unit, p);
+
+  // 2. Keep only named, on-campus units (judged at the unit's centroid) and bucket them by normalized name
+  const clusters = [], byName = new Map();
+  for (const u of units.values()) {
+    const c = weightedCentroid(u), t = u[0].tags;
+    const name = cleanName(t.name) || stadiums.find(s => within(c, s.poly))?.name;
+    if (!name || !onCampus(c) || excluded(t, name)) continue;
+    for (const p of u) p.name = name;
+    push(byName, normName(name), u);
+  }
+
+  // 3. Split each name bucket by distance (single-linkage): two units join when any of their parts
+  //    are within SPLIT_DIST, so a part only splits off if it's far from every other part
+  for (const us of byName.values()) {
+    const root = us.map((_, i) => i);
+    const find = (i) => root[i] === i ? i : (root[i] = find(root[i]));
+    for (let i = 0; i < us.length; i++) for (let j = i + 1; j < us.length; j++)
+      if (us[i].some(a => us[j].some(b => Math.hypot(a.cx - b.cx, a.cy - b.cy) <= SPLIT_DIST))) root[find(i)] = find(j);
+    const groups = new Map();
+    us.forEach((u, i) => push(groups, find(i), u));
+    const split = [...groups.values()].map(g => ({ parts: g.flat() }));
+    if (split.length > 1) labelSplits(split);
+    clusters.push(...split);
+  }
+
+  const used = new Set();
+  for (const c of clusters) {
+    const b = makeBuilding(c);
+    let n = b.name; // last-resort guard so directory names are unique
+    for (let k = 2; used.has(normName(n)); k++) n = `${b.name} (${k})`;
+    used.add(normName(n)); b.name = n;
+    buildings.push(b);
+  }
+  buildings.sort((a, b) => b.area - a.area); // partial-name lookups prefer the bigger building
+}
+
+// Same-name buildings far apart get a compass suffix relative to the group's middle, e.g. "(north)" / "(south)"
+function labelSplits(split) {
+  const cs = split.map(({ parts }) => weightedCentroid(parts));
+  const mx = cs.reduce((s, c) => s + c[0], 0) / cs.length, my = cs.reduce((s, c) => s + c[1], 0) / cs.length;
+  const seen = new Map();
+  split.forEach((c, i) => {
+    const dx = cs[i][0] - mx, dy = cs[i][1] - my;
+    const dir = Math.abs(dy) >= Math.abs(dx) ? (dy > 0 ? "north" : "south") : (dx > 0 ? "east" : "west");
+    const n = (seen.get(dir) ?? 0) + 1; seen.set(dir, n);
+    c.suffix = n > 1 ? `${dir} ${n}` : dir;
+  });
+}
+
+function weightedCentroid(parts) {
+  const A = parts.reduce((s, p) => s + p.area, 0);
+  return [parts.reduce((s, p) => s + p.cx * p.area, 0) / A, parts.reduce((s, p) => s + p.cy * p.area, 0) / A];
+}
+
+// Two parts with near-identical footprints (e.g. a building mapped twice) would z-fight
+function sameFootprint(a, b) {
+  const [ax0, ay0, ax1, ay1] = a.bbox, [bx0, by0, bx1, by1] = b.bbox;
+  const inter = Math.max(0, Math.min(ax1, bx1) - Math.max(ax0, bx0)) * Math.max(0, Math.min(ay1, by1) - Math.max(ay0, by0));
+  const union = (ax1 - ax0) * (ay1 - ay0) + (bx1 - bx0) * (by1 - by0) - inter;
+  if (union > 0 && inter / union >= 0.9) return true;
+  return Math.hypot(a.cx - b.cx, a.cy - b.cy) <= 1 && Math.abs(a.area - b.area) <= 0.05 * Math.max(a.area, b.area);
+}
+
+function makeBuilding({ parts: all, suffix }) {
+  // Keep the taller of any near-duplicate pair
+  const parts = [], dropped = [];
+  for (const p of [...all].sort((a, b) => b.height - a.height || b.area - a.area))
+    if (parts.some(k => sameFootprint(k, p))) dropped.push(p.osmId); else parts.push(p);
+
+  const largest = parts.reduce((a, b) => b.area > a.area ? b : a);
+  const tallest = parts.reduce((a, b) => b.height > a.height ? b : a);
+  // Display name: the spelling most parts use (ties go to more footprint area)
+  const votes = new Map();
+  for (const p of parts) votes.set(p.name, (votes.get(p.name) ?? 0) + 1 + p.area * 1e-9);
+  const base = [...votes].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+  // Category from the largest part, unless some part points to something more specific
+  const catOf = (p) => categoryOf({ ...p.tags, name: p.name }); // name may come from a stadium area
+  let category = catOf(largest);
+  if (!SPECIFIC.includes(category)) category = SPECIFIC.find(c => parts.some(p => catOf(p) === c)) ?? category;
+
+  const [cx, cy] = weightedCentroid(parts);
+  const x0 = Math.min(...parts.map(p => p.bbox[0])), y0 = Math.min(...parts.map(p => p.bbox[1]));
+  const x1 = Math.max(...parts.map(p => p.bbox[2])), y1 = Math.max(...parts.map(p => p.bbox[3]));
+  const [tx, ty] = interiorPoint(tallest.poly, [tallest.cx, tallest.cy]);
+
+  const group = new THREE.Group();
+  const b = {
+    id: largest.unit, // stable map object id (the OSM element of the largest part), e.g. "relation/1074686"
+    name: base && suffix ? `${base} (${suffix})` : base, category, parts: [], tags: largest.tags,
+    center: new THREE.Vector3(cx, 0, -cy), top: new THREE.Vector3(tx, tallest.height, -ty),
+    height: tallest.height, radius: Math.hypot(x1 - x0, y1 - y0) / 2,
+    area: parts.reduce((s, p) => s + p.area, 0), group, dropped,
+  };
+  // Separate child meshes (not merged) so each keeps the roof/wall material groups
+  for (const p of parts) {
+    const g = new THREE.ExtrudeGeometry(toShape(p.poly), { depth: p.height, bevelEnabled: false });
+    g.rotateX(-Math.PI / 2);
+    const mesh = new THREE.Mesh(g, baseMats);
+    mesh.castShadow = mesh.receiveShadow = true;
+    mesh.userData = { building: b, part: p };
+    group.add(mesh); b.parts.push(mesh); partMeshes.push(mesh);
+  }
+  scene.add(group);
+  return b;
+}
+
+function plantTrees(nodes, grass) {
+  let pts = nodes.slice(0, 4000);
+  if (pts.length < 150) { // Few trees mapped: scatter some in smaller green spaces (keeps big lawns open)
+    for (const p of grass) {
+      const v = p.outer.map(([x, y]) => new THREE.Vector2(x, y));
+      const area = Math.abs(THREE.ShapeUtils.area(v));
+      if (area > 40000) continue;
+      const xs = p.outer.map(q => q[0]), ys = p.outer.map(q => q[1]);
+      const n = Math.min(60, Math.floor(area / 500));
+      for (let i = 0, tries = 0; i < n && tries < n * 10; tries++) {
+        const q = [xs.reduce((a, b) => Math.min(a, b)) + Math.random() * (Math.max(...xs) - Math.min(...xs)),
+                   ys.reduce((a, b) => Math.min(a, b)) + Math.random() * (Math.max(...ys) - Math.min(...ys))];
+        if (pointInPoly(q, p.outer)) { pts.push(q); i++; }
+      }
+    }
+  }
+  if (!pts.length) return;
+  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.6, 0.8, 5, 5), mat(0x6b4a33), pts.length);
+  const crown = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(4.5, 0), new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true }), pts.length);
+  const greens = [0x5f8f47, 0x6f9e4f, 0x7fae5a, 0x557f3f].map(c => new THREE.Color(c));
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), v = new THREE.Vector3();
+  pts.forEach(([x, y], i) => {
+    const k = 0.8 + Math.random() * 0.6;
+    m.compose(v.set(x, 2.5 * k, -y), q, s.set(k, k, k)); trunk.setMatrixAt(i, m);
+    q.setFromEuler(new THREE.Euler(0, Math.random() * 6.28, 0));
+    m.compose(v.set(x, 7.5 * k, -y), q, s.set(k, k * 1.1, k)); crown.setMatrixAt(i, m);
+    crown.setColorAt(i, greens[i % greens.length]);
+  });
+  for (const t of [trunk, crown]) { t.castShadow = true; t.receiveShadow = true; scene.add(t); }
+}
+
+// ---------- Flag pin ----------
+// The flag is placed from the building group's actual world-space bounding box, so it stays
+// correct whatever the height exaggeration is, however many parts the building has, and
+// whatever transforms are applied to the group.
+const MARKER_CLEARANCE = 4;                     // small gap so the pole never sinks into the roof
+const _box = new THREE.Box3(), _boxCenter = new THREE.Vector3();
+const _markerRay = new THREE.Raycaster();
+const _down = new THREE.Vector3(0, -1, 0);
+const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3();
+const _ab = new THREE.Vector3(), _ac = new THREE.Vector3(), _normal = new THREE.Vector3();
+function buildingWorldBounds(b, target = new THREE.Box3()) {
+  // Force every ancestor/child matrix current before measuring. The precise path considers the
+  // transformed vertices, rather than expanding a cached local bounding box.
+  b.group.updateWorldMatrix(true, true);
+  return target.setFromObject(b.group, true);
+}
+function markerSpot(b) {
+  buildingWorldBounds(b, _box);
+  _box.getCenter(_boxCenter);
+  // Prefer the geometric centre when there is real roof below it. Courtyards and open stadiums
+  // have empty AABB centres, so a plain `box.max.y` marker visibly floats over empty space.
+  _markerRay.set(new THREE.Vector3(_boxCenter.x, _box.max.y + 100, _boxCenter.z), _down);
+  const hit = _markerRay.intersectObjects(b.parts, false)[0];
+  if (hit) return { x: hit.point.x, y: hit.point.y + MARKER_CLEARANCE, z: hit.point.z, surfaceY: hit.point.y };
+
+  // No roof at the group centre: choose the highest upward-facing roof triangle nearest that
+  // centre. This still derives the result from transformed world geometry—never stored heights.
+  let best = null;
+  for (const mesh of b.parts) {
+    const pos = mesh.geometry.getAttribute("position"), idx = mesh.geometry.index;
+    const count = idx ? idx.count : pos.count;
+    for (let i = 0; i + 2 < count; i += 3) {
+      const ia = idx ? idx.getX(i) : i, ib = idx ? idx.getX(i + 1) : i + 1, ic = idx ? idx.getX(i + 2) : i + 2;
+      _a.fromBufferAttribute(pos, ia).applyMatrix4(mesh.matrixWorld);
+      _b.fromBufferAttribute(pos, ib).applyMatrix4(mesh.matrixWorld);
+      _c.fromBufferAttribute(pos, ic).applyMatrix4(mesh.matrixWorld);
+      _ab.subVectors(_b, _a); _ac.subVectors(_c, _a); _normal.crossVectors(_ab, _ac).normalize();
+      if (Math.abs(_normal.y) < 0.8) continue;
+      const x = (_a.x + _b.x + _c.x) / 3, y = (_a.y + _b.y + _c.y) / 3, z = (_a.z + _b.z + _c.z) / 3;
+      const d2 = (x - _boxCenter.x) ** 2 + (z - _boxCenter.z) ** 2;
+      if (!best || y > best.y + 0.01 || (Math.abs(y - best.y) <= 0.01 && d2 < best.d2)) best = { x, y, z, d2 };
+    }
+  }
+  const roof = best ?? { x: _boxCenter.x, y: _box.max.y, z: _boxCenter.z };
+  return { x: roof.x, y: roof.y + MARKER_CLEARANCE, z: roof.z, surfaceY: roof.y };
+}
+const flag = new THREE.Group();
+{
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 40, 8), mat(0xc9a45c, 0.4));
+  pole.position.y = 20; pole.castShadow = true;
+  const cloth = new THREE.Mesh(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 40, 0), new THREE.Vector3(0, 28, 0), new THREE.Vector3(18, 34, 0)]),
+    new THREE.MeshStandardMaterial({ color: COLORS.maroon, side: THREE.DoubleSide, roughness: 0.8 })
+  );
+  cloth.geometry.computeVertexNormals(); cloth.castShadow = true;
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(1.8, 12, 8), mat(COLORS.orange, 0.5)); cap.position.y = 41;
+  flag.add(pole, cloth, cap); flag.userData.cloth = cloth; flag.visible = false;
+  scene.add(flag);
+}
+
+// ---------- Camera flights (this is what the voice agent calls) ----------
+let flight = null, panTween = null, highlighted = null;
+const ease = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+// OrbitControls applies perspective zoom immediately, even with damping enabled. Capture the
+// distance it requested, restore the last rendered distance before the next frame, then ease to
+// the request here. Because OrbitControls still receives the original events, mouse wheels,
+// high-resolution trackpads and two-finger pinch gestures keep their native normalization.
+const smoothZoom = {
+  target: camera.position.distanceTo(controls.target),
+  active: false,
+};
+const touchPointers = new Set();
+const cameraDistance = () => camera.position.distanceTo(controls.target);
+function publishCameraState() {
+  document.documentElement.dataset.cameraState = JSON.stringify({
+    distance: +cameraDistance().toFixed(2),
+    targetDistance: +smoothZoom.target.toFixed(2),
+    zoomEasing: smoothZoom.active,
+    panEasing: !!panTween,
+    targetX: +controls.target.x.toFixed(2),
+    targetZ: +controls.target.z.toFixed(2),
+  });
+}
+function setCameraDistance(distance) {
+  const offset = camera.position.clone().sub(controls.target);
+  if (offset.lengthSq() < 1e-8) offset.set(0, 1, 1);
+  camera.position.copy(controls.target).add(offset.setLength(distance));
+}
+function captureZoomRequest(before) {
+  const after = cameraDistance();
+  if (!Number.isFinite(before) || !Number.isFinite(after) || before < 1 || Math.abs(after - before) < 1e-4) return;
+  if (!smoothZoom.active) smoothZoom.target = before;
+  smoothZoom.target = THREE.MathUtils.clamp(smoothZoom.target * (after / before), controls.minDistance, controls.maxDistance);
+  setCameraDistance(before);                 // no visual jump before the next animation frame
+  smoothZoom.active = true;
+  publishCameraState();
+}
+function observeOrbitZoom() {
+  const before = cameraDistance();
+  // OrbitControls' pointer listeners can be installed after ours. A microtask runs once every
+  // listener for this input event has finished, so `after` is always the requested distance.
+  queueMicrotask(() => captureZoomRequest(before));
+}
+renderer.domElement.addEventListener("wheel", observeOrbitZoom, { capture: true, passive: true });
+renderer.domElement.addEventListener("pointerdown", (event) => {
+  if (event.pointerType === "touch") touchPointers.add(event.pointerId);
+}, { capture: true });
+renderer.domElement.addEventListener("pointermove", (event) => {
+  if (event.pointerType === "touch" && touchPointers.size >= 2) observeOrbitZoom();
+}, { capture: true });
+for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
+  renderer.domElement.addEventListener(type, (event) => touchPointers.delete(event.pointerId), { capture: true });
+}
+
+function updateSmoothZoom(dt) {
+  const current = cameraDistance();
+  if (!smoothZoom.active) { smoothZoom.target = current; return; }
+  const next = THREE.MathUtils.damp(current, smoothZoom.target, 15, dt);
+  setCameraDistance(next);
+  if (Math.abs(next - smoothZoom.target) < 0.05) {
+    setCameraDistance(smoothZoom.target);
+    smoothZoom.active = false;
+  }
+  publishCameraState();
+}
+
+// UI zoom uses the same eased target as wheel and pinch input, so every zoom path feels alike.
+// `direction` is positive for zooming in and negative for zooming out.
+function zoomCamera(direction) {
+  flight = null;
+  panTween = null;
+  controls.autoRotate = false;
+  controls.dispatchEvent({ type: "start" });
+  const currentTarget = smoothZoom.active ? smoothZoom.target : cameraDistance();
+  const factor = direction > 0 ? 0.72 : 1 / 0.72;
+  smoothZoom.target = THREE.MathUtils.clamp(currentTarget * factor, controls.minDistance, controls.maxDistance);
+  smoothZoom.active = Math.abs(cameraDistance() - smoothZoom.target) >= 0.05;
+  publishCameraState();
+}
+
+// Move parallel to the campus plane in the direction the user sees on screen. The step scales
+// with the current field of view, so an arrow remains useful both close to a building and while
+// looking at the whole diorama.
+function panCamera(screenX, screenY) {
+  flight = null;
+  smoothZoom.active = false;
+  controls.autoRotate = false;                       // manual navigation takes ownership
+  controls.dispatchEvent({ type: "start" });       // cancel route-camera tweens, as drag does
+
+  const forward = new THREE.Vector3();
+  camera.getWorldDirection(forward);
+  forward.y = 0;
+  if (forward.lengthSq() < 1e-8) forward.set(0, 0, -1);
+  forward.normalize();
+  const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+  const visibleHeight = 2 * cameraDistance() * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5));
+  const step = THREE.MathUtils.clamp(visibleHeight * 0.14, 35, 420);
+  const delta = right.multiplyScalar(screenX * step).add(forward.multiplyScalar(screenY * step));
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  panTween = {
+    fromT: controls.target.clone(), fromP: camera.position.clone(),
+    toT: controls.target.clone().add(delta), toP: camera.position.clone().add(delta),
+    t0: performance.now(), ms: reduce ? 1 : 280,
+  };
+  publishCameraState();
+}
+
+controls.addEventListener("start", () => { panTween = null; });
+
+function flyToPoint(target, dist, polar, ms = 2200) {
+  smoothZoom.active = false;
+  panTween = null;
+  const fromT = controls.target.clone(), fromP = camera.position.clone();
+  const az = Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z);
+  const toP = new THREE.Vector3(
+    target.x + dist * Math.sin(polar) * Math.sin(az), target.y + dist * Math.cos(polar), target.z + dist * Math.sin(polar) * Math.cos(az));
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  flight = { fromT, fromP, toT: target.clone(), toP, t0: performance.now(), ms: reduce ? 1 : ms };
+}
+
+function findBuilding(query) {
+  const q = normName(query); if (!q) return null;
+  const named = namedBuildings().map(b => [normName(b.name), b]);
+  return (named.find(([n]) => n === q)
+      || named.find(([n]) => n.includes(q))
+      || named.find(([n]) => q.includes(n)))?.[1] ?? null;
+}
+
+let hovered = null, flagSpot = null;
+const mapEvents = new EventTarget(); // "select" (detail: building) and "hover" (detail: { building, x, y })
+const paint = (b) => { if (b) for (const m of b.parts) m.material = b === highlighted ? hiMats : b === hovered ? hoverMats : baseMats; };
+function setHighlight(b, on) { if (!b) return; if (!on && highlighted === b) highlighted = null; paint(b); }
+function setHover(b) { if (b === hovered) return; const prev = hovered; hovered = b; paint(prev); paint(b); }
+
+// opts.fly=false keeps the camera where it is (used while a walking route drives the camera)
+function focusBuilding(b, note, { fly = true, emit = true } = {}) {
+  const prev = highlighted; highlighted = b; paint(prev); paint(b);
+  flagSpot = markerSpot(b);                      // top centre of the whole building, in world space
+  flag.position.set(flagSpot.x, flagSpot.y, flagSpot.z); flag.visible = true;
+  const dist = THREE.MathUtils.clamp(b.radius * 8, 550, 2400); // frame the whole group
+  if (fly) flyToPoint(new THREE.Vector3(b.center.x, b.height * 0.4, b.center.z), dist, 0.9);
+  announce(note ? `${b.name}. ${note}` : b.name);
+  if (emit) mapEvents.dispatchEvent(new CustomEvent("select", { detail: b }));
+}
+function clearFocus() {
+  const prev = highlighted; highlighted = null; paint(prev); flag.visible = false;
+}
+
+// Public API: call these from the console, your own UI, or an external voice agent
+window.flyTo = (name, note) => {
+  const b = findBuilding(name);
+  if (!b) return `No building on the map matches "${name}".`;
+  focusBuilding(b, note); return `Flying to ${b.name}.`;
+};
+window.overview = () => {
+  clearFocus();
+  mapEvents.dispatchEvent(new CustomEvent("overview"));
+  flyToPoint(HOME.target, HOME.dist, HOME.polar);
+  announce("Virginia Tech, Blacksburg. Showing the whole campus.");
+  return "Showing the whole campus.";
+};
+window.listBuildings = () => namedBuildings().map(b => ({ name: b.name, category: b.category })).sort((a, b) => a.name.localeCompare(b.name));
+window.downloadCampusData = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(window.__campusData)], { type: "application/json" }));
+  a.download = "vt-campus.json"; a.click();
+};
+
+// Debugging: inspect how OSM parts were grouped
+window.debugBuildings = () => {
+  const rows = [...buildings]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(b => ({ name: b.name, category: b.category, parts: b.parts.length,
+                 height: +b.height.toFixed(1), radius: +b.radius.toFixed(1) }));
+  console.table(rows); return rows;
+};
+window.debugBuilding = (name) => {
+  const b = findBuilding(name);
+  if (!b) return `No building on the map matches "${name}".`;
+  const rows = b.parts.map(({ userData: { part: p } }) => ({ osm: p.osmId, name: p.tags.name ?? `(${p.name})`, area: +p.area.toFixed(1),
+    height: +p.height.toFixed(1), tags: JSON.stringify(p.tags) }));
+  console.log(`${b.name}: ${b.category}, ${rows.length} part(s)` + (b.dropped.length ? `; dropped duplicates: ${b.dropped.join(", ")}` : ""));
+  console.table(rows); return rows;
+};
+window.debugCamera = () => ({
+  distance: +cameraDistance().toFixed(2),
+  targetDistance: +smoothZoom.target.toFixed(2),
+  zoomEasing: smoothZoom.active,
+  panEasing: !!panTween,
+  target: { x: +controls.target.x.toFixed(2), y: +controls.target.y.toFixed(2), z: +controls.target.z.toFixed(2) },
+  position: { x: +camera.position.x.toFixed(2), y: +camera.position.y.toFixed(2), z: +camera.position.z.toFixed(2) },
+});
+// Geometry-only marker check used during development and judging. `roofGap` should always equal
+// MARKER_CLEARANCE, including for scaled and multi-part buildings.
+window.debugMarkerSpots = (names = ["Burruss Hall", "Burchard Hall", "Newman Library", "Pritchard Hall", "Lane Stadium"]) =>
+  names.map((name) => {
+    const b = findBuilding(name);
+    if (!b) return { name, error: "not found" };
+    const bounds = buildingWorldBounds(b);
+    const spot = markerSpot(b);
+    return {
+      name: b.name, parts: b.parts.length,
+      width: +(bounds.max.x - bounds.min.x).toFixed(2),
+      depth: +(bounds.max.z - bounds.min.z).toFixed(2),
+      groupTopY: +bounds.max.y.toFixed(2), roofY: +spot.surfaceY.toFixed(2), markerY: +spot.y.toFixed(2),
+      roofGap: +(spot.y - spot.surfaceY).toFixed(2),
+      centered: Math.abs(spot.x - (bounds.min.x + bounds.max.x) / 2) < 1e-6
+        && Math.abs(spot.z - (bounds.min.z + bounds.max.z) / 2) < 1e-6,
+    };
+  });
+
+// ---------- Interaction ----------
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+let downAt = null;
+renderer.domElement.addEventListener("pointerdown", (e) => { downAt = [e.clientX, e.clientY]; });
+function pick(e) {
+  mouse.set(e.clientX / innerWidth * 2 - 1, -e.clientY / innerHeight * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  return ray.intersectObjects(partMeshes, false)[0]?.object.userData.building ?? null; // any part resolves to its whole building
+}
+renderer.domElement.addEventListener("pointerup", (e) => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5) return; // ignore drags
+  const b = pick(e);
+  if (b) focusBuilding(b);
+});
+// Hover: raycast at most once per frame, and not while dragging
+let hoverEvt = null;
+renderer.domElement.addEventListener("pointermove", (e) => { if (e.buttons === 0 && e.pointerType === "mouse") hoverEvt = e; });
+renderer.domElement.addEventListener("pointerleave", () => { hoverEvt = null; setHover(null); mapEvents.dispatchEvent(new CustomEvent("hover", { detail: null })); });
+function updateHover() {
+  if (!hoverEvt) return;
+  const e = hoverEvt; hoverEvt = null;
+  const b = pick(e); setHover(b);
+  renderer.domElement.style.cursor = b ? "pointer" : "";
+  mapEvents.dispatchEvent(new CustomEvent("hover", { detail: b ? { building: b, x: e.clientX, y: e.clientY } : null }));
+}
+function namedBuildings() { return buildings; } // every building is named, and names are unique after grouping
+
+// ---------- Loop ----------
+const clock = new THREE.Clock();
+const frameHooks = new Set(); // extra per-frame work registered by the app (route walker, etc.)
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.1), t = clock.elapsedTime;
+  updateHover();
+  for (const f of frameHooks) f(dt, t);
+  if (flight) {
+    const k = Math.min(1, (performance.now() - flight.t0) / flight.ms), e = ease(k);
+    controls.target.lerpVectors(flight.fromT, flight.toT, e);
+    camera.position.lerpVectors(flight.fromP, flight.toP, e);
+    if (k >= 1) flight = null;
+  }
+  if (panTween) {
+    const k = Math.min(1, (performance.now() - panTween.t0) / panTween.ms), e = ease(k);
+    controls.target.lerpVectors(panTween.fromT, panTween.toT, e);
+    camera.position.lerpVectors(panTween.fromP, panTween.toP, e);
+    if (k >= 1) panTween = null;
+    publishCameraState();
+  }
+  updateSmoothZoom(dt);
+  if (flag.visible) {
+    flag.position.y = (flagSpot?.y ?? 0) + Math.sin(t * 2) * 1.5;      // bob from the measured roof top
+    flag.userData.cloth.rotation.y = Math.sin(t * 3) * 0.25;
+  }
+  controls.update();
+  composer.render();
+});
+
+// ---------- Go ----------
+const status = document.getElementById("status");
+loadData().then((data) => {
+  window.__campusData = data;
+  build(data);
+  status.remove();
+  // The orientation app (panels, assistant, routing, voice) sits on top of the map through this API
+  const mapApi = {
+    THREE, scene, camera, controls, renderer, HOME, HALF, CATEGORIES,
+    buildings, areas, flag, events: mapEvents, toXY, pointInPoly,
+    findBuilding, getBuildingById: (id) => buildings.find(b => b.id === id) ?? null,
+    focusBuilding, clearFocus, setHover, flyToPoint, placeCamera, panCamera, zoomCamera, announce, markerSpot, buildingWorldBounds,
+    cancelFlight: () => { flight = null; panTween = null; },
+    isFlying: () => !!flight,
+    onFrame: (f) => { frameHooks.add(f); return () => frameHooks.delete(f); },
+    get selected() { return highlighted; },
+  };
+  // Machine-readable geometry smoke test for the five representative buildings above. This is
+  // data only (no marker object is created) and makes regressions easy to spot in browser tests.
+  document.documentElement.dataset.markerDiagnostics = JSON.stringify(window.debugMarkerSpots());
+  import("./src/app.js").then((m) => m.startApp(mapApi, data))
+    .catch((err) => console.error("Orientation app failed to start; the map still works on its own.", err));
+}).catch((err) => {
+  status.innerHTML = `Map didn't load<small>${err.message}</small>`;
+});
+</script>
+</body>
+</html>

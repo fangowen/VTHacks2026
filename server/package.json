@@ -1,0 +1,24 @@
+{
+  "name": "hokie-guide-server",
+  "version": "1.0.0",
+  "description": "Backend for the Hokie Guide: Gemini replies spoken by ElevenLabs.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test:guide": "node test-guide.mjs"
+  },
+  "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.68.0",
+    "@google/genai": "^2.23.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0"
+  },
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  }
+}

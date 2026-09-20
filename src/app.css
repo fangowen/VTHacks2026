@@ -1,0 +1,325 @@
+/* Orientation UI. Reuses the map's existing palette (parchment, brass, walnut, maroon, orange)
+   so the new panels read as part of the same diorama. */
+
+:root {
+  --panel-w: 364px;
+  --top-h: 54px;          /* the top bar wraps to two rows on narrow screens */
+  --card: #ebe2cb;
+  --card-edge: #c9a45c;
+  --ink: #2b211a;
+  --ink-soft: #5a4a3c;
+  --shadow: 0 12px 30px rgba(0, 0, 0, .45);
+  --radius: 10px;
+  --control-h: 40px;
+  --stencil: "Big Shoulders Stencil Display", Impact, sans-serif;
+}
+
+/* An explicit display rule below would otherwise beat the [hidden] attribute */
+[hidden] { display: none !important; }
+:where(button, input, select, [role="button"]):focus-visible {
+  outline: 3px solid #f5a04a;
+  outline-offset: 2px;
+}
+
+/* ---------- Top bar ---------- */
+.hk-top {
+  position: fixed; inset: 0 0 auto 0; height: 54px; z-index: 12;
+  display: flex; align-items: center; gap: 16px; padding: 0 16px;
+  background: linear-gradient(180deg, rgba(28, 23, 20, .96), rgba(28, 23, 20, .86));
+  border-bottom: 1px solid rgba(201, 164, 92, .5);
+}
+.hk-brand { display: flex; flex-direction: column; line-height: 1.05; color: var(--card); min-width: 150px; }
+.hk-brand b { font: 700 21px/1 var(--stencil); color: #e5751f; letter-spacing: .02em; }
+.hk-brand span { font-size: 11px; color: rgba(235, 226, 203, .72); }
+.hk-tabs { display: flex; gap: 6px; margin: 0 auto; }
+.hk-tab {
+  font: 600 14px "Source Serif 4", Georgia, serif; color: var(--card);
+  background: rgba(74, 50, 34, .7); border: 1px solid rgba(201, 164, 92, .6); border-radius: 999px;
+  padding: 6px 16px; cursor: pointer;
+}
+.hk-tab:hover { background: #6b452c; }
+.hk-tab[aria-current="true"] { background: #861f41; border-color: #e5751f; }
+.hk-tools { display: flex; align-items: center; gap: 8px; }
+
+.hk-icon {
+  min-width: var(--control-h); min-height: var(--control-h);
+  font-size: 15px; line-height: 1; padding: 7px 9px; cursor: pointer; color: var(--card);
+  background: rgba(74, 50, 34, .7); border: 1px solid rgba(201, 164, 92, .6); border-radius: var(--radius);
+}
+.hk-icon:hover, .hk-icon.on { background: #861f41; }
+.hk-select, .hk-field {
+  font: 14px "Source Serif 4", Georgia, serif; color: var(--ink); background: #f6f0e0;
+  min-height: var(--control-h); border: 1px solid rgba(74, 50, 34, .4); border-radius: var(--radius); padding: 6px 8px; max-width: 100%;
+}
+.hk-top .hk-select { background: rgba(74, 50, 34, .7); color: var(--card); border-color: rgba(201, 164, 92, .6); }
+.hk-chip {
+  font: 600 13px "Source Serif 4", Georgia, serif; color: var(--ink); background: rgba(74, 50, 34, .12);
+  border: 1px solid rgba(74, 50, 34, .35); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.hk-chip.on { background: #861f41; color: var(--card); border-color: #e5751f; }
+.hk-chip.tiny { padding: 3px 8px; font-size: 12px; }
+.hk-top .hk-chip { color: var(--card); background: rgba(74, 50, 34, .7); border-color: rgba(201, 164, 92, .6); white-space: nowrap; }
+
+/* ---------- Side panel ---------- */
+.hk-panel {
+  position: fixed; left: 20px; top: calc(var(--top-h) + 12px); bottom: 20px; width: var(--panel-w); z-index: 10;
+  display: flex; flex-direction: column; background: var(--card);
+  border: 2px solid var(--card-edge); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
+  transform: translateX(calc(-100% - 28px)); transition: transform .25s ease; visibility: hidden;
+}
+.hk-panel.open { transform: none; visibility: visible; }
+.hk-panel-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid rgba(74, 50, 34, .25); }
+.hk-panel-title { font: 700 20px/1.1 var(--stencil); color: #861f41; margin: 0; flex: 1; }
+.hk-panel-head .hk-icon { background: rgba(74, 50, 34, .12); color: var(--ink); border-color: rgba(74, 50, 34, .3); }
+.hk-panel-head .hk-icon:hover { background: #861f41; color: var(--card); }
+.hk-panel-body { overflow-y: auto; padding: 12px 14px 20px; }
+
+.hk-search { width: 100%; font: 15px "Source Serif 4", Georgia, serif; padding: 9px 12px; margin-bottom: 10px;
+  background: #f6f0e0; color: var(--ink); border: 1px solid rgba(74, 50, 34, .4); }
+.hk-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 12px; }
+.hk-list { display: flex; flex-direction: column; }
+.hk-row, .hk-item {
+  display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; cursor: pointer;
+  background: none; border: 0; border-bottom: 1px solid rgba(74, 50, 34, .12); padding: 8px 6px;
+  font: 15px/1.35 "Source Serif 4", Georgia, serif; color: var(--ink);
+}
+.hk-row:hover, .hk-item:hover { background: rgba(134, 31, 65, .1); }
+.hk-row-name { flex: 1; }
+.hk-row-sub, .hk-item-sub { font-size: 12.5px; color: var(--ink-soft); }
+.hk-item-main { display: flex; flex-direction: column; flex: 1; gap: 2px; }
+.hk-item-title { font-weight: 600; }
+.hk-time { font: 600 13px "Source Serif 4", Georgia, serif; color: #861f41; min-width: 62px; }
+.hk-go {
+  font: 600 12px "Source Serif 4", Georgia, serif; color: var(--card); background: #861f41;
+  border-radius: 999px; padding: 4px 10px; white-space: nowrap;
+}
+.hk-go:hover { background: #e5751f; color: var(--ink); }
+.hk-day { font: 700 17px/1.2 var(--stencil); color: #861f41; margin: 16px 0 4px; border-bottom: 1px solid rgba(74, 50, 34, .25); padding-bottom: 3px; }
+.hk-section { margin-top: 14px; }
+.hk-section h3 { font: 700 15px/1.2 var(--stencil); letter-spacing: .03em; color: #6b452c; margin: 0 0 4px; text-transform: uppercase; }
+.hk-desc { font-size: 15px; line-height: 1.45; margin: 0 0 6px; }
+.hk-ul { margin: 0; padding-left: 18px; font-size: 14px; line-height: 1.5; }
+.hk-note { font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; margin: 8px 0 0; }
+.hk-empty { font-size: 15px; color: var(--ink-soft); }
+.hk-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.hk-badge { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: #861f41; color: var(--card); }
+.hk-badge.alt { background: rgba(74, 50, 34, .15); color: var(--ink); }
+.hk-kv { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid rgba(74, 50, 34, .12); font-size: 14px; }
+.hk-kv span { color: var(--ink-soft); }
+
+.hk-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.hk-primary, .hk-secondary, .hk-send, .hk-hud-btn {
+  min-height: var(--control-h); font: 600 14px "Source Serif 4", Georgia, serif; cursor: pointer; border-radius: var(--radius); padding: 8px 14px;
+  background: #861f41; color: var(--card); border: 1px solid var(--card-edge);
+}
+.hk-primary:hover, .hk-send:hover, .hk-hud-btn:hover { background: #e5751f; color: var(--ink); }
+.hk-secondary { background: rgba(74, 50, 34, .12); color: var(--ink); border-color: rgba(74, 50, 34, .35); }
+.hk-secondary:hover { background: rgba(74, 50, 34, .22); }
+.hk-secondary[disabled] { opacity: .5; cursor: default; }
+.hk-secondary[disabled]:hover { background: rgba(74, 50, 34, .12); }
+.hk-text-btn { background: none; border: 0; color: #861f41; font: 600 14px "Source Serif 4", Georgia, serif; cursor: pointer; text-decoration: underline; }
+.hk-lbl { display: block; font: 600 13px "Source Serif 4", Georgia, serif; color: #6b452c; margin: 12px 0 4px; text-transform: uppercase; letter-spacing: .03em; }
+.hk-check { display: flex; align-items: center; gap: 8px; font-size: 14px; margin: 6px 0; }
+.hk-row-inline { display: flex; gap: 8px; }
+
+/* ---------- Navigation HUD ---------- */
+.hk-hud {
+  position: fixed; top: calc(var(--top-h) + 12px); left: 20px; z-index: 11; width: min(380px, calc(100vw - 32px));
+  background: var(--card); border: 2px solid var(--card-edge); border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px 14px;
+}
+.hk-hud-title { font: 700 20px/1 var(--stencil); color: #861f41; margin: 0 0 8px; }
+.hk-route-points { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.hk-route-points > div { min-width: 0; padding: 7px 9px; border-radius: 8px; background: rgba(74, 50, 34, .1); }
+.hk-route-points span { display: block; font-size: 11px; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+.hk-route-points b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.hk-route-points.compact { margin: 6px 0 0; }
+.hk-hud-text { font: 600 15px "Source Serif 4", Georgia, serif; margin-bottom: 6px; }
+.hk-bar { height: 6px; background: rgba(74, 50, 34, .2); border-radius: 3px; overflow: hidden; }
+.hk-bar i { display: block; height: 100%; width: 0; background: #e5751f; transition: width .2s linear; }
+.hk-hud-btns { display: flex; gap: 6px; margin-top: 8px; }
+
+/* Travel speed slider, in the same parchment/brass language as the rest of the HUD */
+.hk-speed-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.hk-speed-label { font: 600 13px "Source Serif 4", Georgia, serif; color: #6b452c; white-space: nowrap; min-width: 84px; }
+.hk-speed { flex: 1; accent-color: #861f41; height: 22px; cursor: pointer; }
+.hk-hud-btn { padding: 5px 12px; font-size: 13px; flex: 1; }
+
+/* ---------- Hover tooltip ---------- */
+.hk-tip {
+  position: fixed; z-index: 13; pointer-events: none; background: var(--card); color: var(--ink);
+  border: 1px solid var(--card-edge); padding: 3px 9px; font: 600 13px "Source Serif 4", Georgia, serif;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .35);
+}
+
+/* ---------- Assistant ---------- */
+.hk-chat {
+  position: fixed; right: 20px; bottom: 20px; width: 360px; max-height: min(560px, calc(100vh - 100px)); z-index: 11;
+  display: flex; flex-direction: column; background: var(--card); border: 2px solid var(--card-edge); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
+}
+body.hk-travel-open .hk-chat {
+  top: auto;
+  bottom: 20px;
+  max-height: min(560px, calc(100vh - 100px));
+}
+.hk-chat-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #861f41; color: var(--card); }
+.hk-chat-head, .hk-guide-controls, .hk-captions-label, .hk-sugs, .hk-chat-form { flex-shrink: 0; }
+.hk-chat-head b { font: 700 17px/1 var(--stencil); letter-spacing: .03em; }
+.hk-chat-head .hk-icon { background: rgba(0, 0, 0, .18); border-color: rgba(201, 164, 92, .5); }
+.hk-msgs { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; min-height: 120px; }
+.hk-msg { position: relative; padding: 8px 34px 8px 12px; border-radius: 10px; font-size: 14.5px; line-height: 1.45; max-width: 92%; }
+.hk-msg p { margin: 0; }
+.hk-msg.bot { background: rgba(74, 50, 34, .12); align-self: flex-start; }
+.hk-msg.me { background: #861f41; color: var(--card); align-self: flex-end; padding-right: 12px; }
+.hk-msg.thinking { opacity: .6; }
+.hk-msg.error { background: rgba(134, 31, 65, .14); border: 1px solid rgba(134, 31, 65, .45); }
+.hk-guide-controls { display: flex; align-items: end; gap: 8px; padding: 8px 12px; border-bottom: 1px solid rgba(74, 50, 34, .15); }
+.hk-language-field { display: flex; flex: 1; flex-direction: column; gap: 3px; min-width: 0; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.hk-language-select { width: 100%; }
+.hk-stop-audio { white-space: nowrap; }
+.hk-stop-audio:disabled { opacity: .55; cursor: default; }
+.hk-captions-label { padding: 7px 12px 0; font: 700 12px/1 var(--stencil); color: #6b452c; letter-spacing: .05em; text-transform: uppercase; }
+.hk-speak { position: absolute; top: 5px; right: 5px; padding: 3px 5px; font-size: 11px; background: rgba(74, 50, 34, .15); color: var(--ink); border-color: rgba(74, 50, 34, .25); }
+.hk-msg-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.hk-sugs { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; border-top: 1px solid rgba(74, 50, 34, .15); }
+.hk-sugs .hk-chip { white-space: nowrap; }
+.hk-chat-form { display: flex; gap: 6px; padding: 8px 12px 12px; border-top: 1px solid rgba(74, 50, 34, .15); }
+.hk-input { flex: 1; font: 15px "Source Serif 4", Georgia, serif; padding: 8px 10px; background: #f6f0e0; color: var(--ink); border: 1px solid rgba(74, 50, 34, .4); border-radius: 6px; }
+.hk-chat-form .hk-icon { background: rgba(74, 50, 34, .12); color: var(--ink); border-color: rgba(74, 50, 34, .3); }
+.hk-chat-form .hk-icon.on { background: #e5751f; }
+.hk-mic { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+.hk-mic.busy { opacity: .7; cursor: wait; }
+.hk-mic-glyph { line-height: 1; }
+.hk-mic-label { font: 600 13px "Source Serif 4", Georgia, serif; }
+.hk-fab {
+  position: fixed; right: 14px; bottom: 10px; z-index: 11; display: grid; place-items: center;
+  width: 118px; height: 118px; margin: 0; padding: 0; cursor: pointer;
+  color: inherit; background: transparent; border: 0; border-radius: 50%; box-shadow: none;
+  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, .5));
+}
+.hk-fab-prompt {
+  --prompt-width: 150px;
+  position: absolute; right: 78px; top: -18px; z-index: 1; width: var(--prompt-width); box-sizing: border-box;
+  padding: 8px 12px; color: var(--ink); background: var(--card); border: 2px solid var(--card-edge);
+  border-radius: 14px 14px 4px 14px; box-shadow: 0 5px 14px rgba(0, 0, 0, .28);
+  font-family: "Source Serif 4", Georgia, serif; font-size: clamp(11px, calc(var(--prompt-width) / 10.7), 14px);
+  font-weight: 700; line-height: 1.15; white-space: normal; overflow-wrap: anywhere; text-wrap: balance;
+  transition: transform .18s ease, background-color .18s ease;
+}
+.hk-fab-prompt-text { display: block; width: 100%; max-width: 100%; overflow-wrap: anywhere; }
+.hk-fab-prompt::after {
+  content: ""; position: absolute; right: -10px; bottom: -2px; width: 16px; height: 16px;
+  background: var(--card); border-right: 2px solid var(--card-edge); border-bottom: 2px solid var(--card-edge);
+  transform: skew(28deg) rotate(18deg);
+}
+.hk-fab-bird {
+  display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none;
+  transform-origin: 50% 80%; transition: transform .18s ease, filter .18s ease;
+}
+.hk-fab:hover { background: transparent; }
+.hk-fab:hover .hk-fab-prompt { transform: translateY(-2px); background: #fffaf0; }
+.hk-fab:hover .hk-fab-bird { transform: translateY(-3px) scale(1.06); filter: brightness(1.06); }
+.hk-fab:active .hk-fab-bird { transform: translateY(0) scale(.98); }
+
+/* ---------- Discrete edge panning ---------- */
+.hk-edge-pans { position: fixed; inset: 0; z-index: 9; pointer-events: none; }
+.hk-edge-pan {
+  position: fixed; display: grid; place-items: center; pointer-events: auto;
+  width: 52px; height: 78px; margin: 0; padding: 0; cursor: pointer;
+  color: #fff; background: rgba(28, 23, 20, .42); border: 0;
+  opacity: .16; transition: opacity .18s ease, background-color .18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.hk-edge-pan:hover { opacity: .48; background: rgba(28, 23, 20, .58); }
+.hk-edge-pan:active { opacity: .7; }
+.hk-edge-pan:focus-visible { opacity: .82; }
+.hk-edge-chevron { font: 400 36px/1 system-ui, sans-serif; transform: translateY(-2px); }
+.hk-edge-pan-up {
+  top: var(--top-h); left: 50%; transform: translateX(-50%);
+  height: 46px; border-radius: 0 0 18px 18px;
+}
+.hk-edge-pan-down {
+  bottom: 0; left: 50%; transform: translateX(-50%);
+  height: 46px; border-radius: 18px 18px 0 0;
+}
+.hk-edge-pan-left {
+  left: 0; top: 50%; transform: translateY(-50%);
+  width: 46px; border-radius: 0 18px 18px 0;
+}
+.hk-edge-pan-right {
+  right: 0; top: 50%; transform: translateY(-50%);
+  width: 46px; border-radius: 18px 0 0 18px;
+}
+
+/* Conventional map zoom controls, kept below the top bar and out of the map's main sightline. */
+.hk-zoom-controls {
+  position: fixed; top: calc(var(--top-h) + 12px); right: 14px; z-index: 9;
+  display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid rgba(201, 164, 92, .72); border-radius: 10px;
+  background: rgba(28, 23, 20, .72); box-shadow: 0 5px 15px rgba(0, 0, 0, .3);
+}
+.hk-zoom-btn {
+  display: grid; place-items: center; width: 42px; height: 42px; padding: 0; cursor: pointer;
+  color: #fff; background: transparent; border: 0; font: 600 27px/1 system-ui, sans-serif;
+}
+.hk-zoom-btn + .hk-zoom-btn { border-top: 1px solid rgba(201, 164, 92, .5); }
+.hk-zoom-btn:hover { background: rgba(229, 117, 31, .72); }
+.hk-zoom-btn:active { background: #861f41; }
+
+/* ---------- Settings ---------- */
+.hk-settings {
+  position: fixed; right: 20px; top: calc(var(--top-h) + 12px); width: 320px; z-index: 13; max-height: calc(100vh - 100px); overflow-y: auto;
+  background: var(--card); border: 2px solid var(--card-edge); box-shadow: var(--shadow); padding: 12px 14px 16px;
+}
+.hk-settings h3 { font: 700 18px/1.1 var(--stencil); color: #861f41; margin: 0 0 6px; }
+.hk-settings .hk-field, .hk-settings .hk-select { width: 100%; }
+
+/* ---------- Onboarding ---------- */
+.hk-modal { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(28, 23, 20, .72); padding: 20px; }
+.hk-card {
+  width: min(600px, 100%); max-height: calc(100vh - 60px); overflow-y: auto;
+  background: var(--card); border: 2px solid var(--card-edge); box-shadow: var(--shadow); padding: 20px 22px;
+}
+.hk-card h2 { font: 700 30px/1 var(--stencil); color: #861f41; margin: 0 0 4px; }
+.hk-modal-body { margin-top: 10px; }
+.hk-modal-body .hk-select, .hk-modal-body .hk-field { width: 100%; }
+.hk-modal-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.hk-sched { display: flex; flex-direction: column; gap: 8px; }
+.hk-sched-row { display: grid; grid-template-columns: 1.4fr 1.6fr auto auto auto auto; gap: 6px; align-items: center; }
+.hk-sched-row .hk-field.time { width: 94px; }
+.hk-days { display: flex; gap: 3px; }
+
+/* ---------- Small screens ---------- */
+@media (max-width: 900px) {
+  .hk-brand span { display: none; }
+  .hk-panel { left: 12px; right: 12px; width: auto; bottom: 12px; }
+  body.hk-guide-open .hk-panel.open { bottom: calc(48vh + 24px); }
+  .hk-hud { left: 12px; right: 12px; width: auto; }
+  .hk-chat { left: 12px; right: 12px; width: auto; bottom: 12px; max-height: 48vh; }
+  body.hk-travel-open .hk-chat { top: auto; max-height: 40vh; }
+  body.hk-travel-open.hk-guide-open .hk-hud { display: none; }
+  body:not(.hk-guide-open) .hk-panel.open { bottom: 126px; }
+  .hk-fab { right: 6px; bottom: 4px; width: 92px; height: 92px; }
+  .hk-fab-prompt { --prompt-width: 138px; right: 62px; top: -22px; padding: 7px 10px; }
+  .hk-zoom-controls { right: 8px; }
+  .hk-sched-row { grid-template-columns: 1fr 1fr; }
+  .hk-edge-pan { width: 44px; height: 64px; opacity: .2; }
+  .hk-edge-pan-up, .hk-edge-pan-down { width: 48px; height: 42px; }
+  .hk-edge-pan-down { bottom: 0; }
+  body.hk-guide-open .hk-edge-pan-down { bottom: calc(48vh + 12px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hk-edge-pan, .hk-fab-bird, .hk-fab-prompt, .hk-zoom-btn { transition: none; }
+}
+@media (max-width: 620px) {
+  .hk-tabs { order: 3; width: 100%; overflow-x: auto; padding-bottom: 2px; }
+  .hk-top { flex-wrap: wrap; height: auto; padding: 8px 12px; gap: 8px; }
+  .hk-brand { min-width: 0; }
+  .hk-route-points { grid-template-columns: 1fr; }
+  .hk-hud-btns { flex-wrap: wrap; }
+  .hk-hud-btn { min-width: calc(50% - 6px); }
+  .hk-guide-controls { align-items: end; flex-direction: row; }
+  .hk-stop-audio { width: auto; }
+  .hk-chat-form { flex-wrap: nowrap; }
+  .hk-input { min-width: 0; width: auto; min-height: 44px; }
+  .hk-mic-label { display: none; }
+}
