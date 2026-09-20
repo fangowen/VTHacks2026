@@ -29,19 +29,34 @@ next to `index.html`.
 | `src/places.js` | Joins map building records to campus metadata; lookup, proximity, door points. |
 | `src/data/campus.js` | Building info, dining, clubs, events, resources, majors and schedules. |
 | `src/routing.js` | Walking graph from the map's OSM paths, A\*, step-free routing. |
-| `src/navigation.js` | Route ribbon, walking guide marker, follow camera, pause/resume/skip/recenter. |
+| `src/navigation.js` | Route ribbon, walking guide bird, follow camera, bird's-eye view, speed (0.5×–3×), pause/resume/skip. |
 | `src/ai.js` | Sends guide questions and live campus context to Gemini, then applies validated building actions. |
 | `src/api.js` | Client for our backend (`POST /api/guide` and `POST /api/speech`). Uses the page hostname on port 8787, with an optional `window.HOKIE_GUIDE_API_URL` override. |
 | `src/voice.js` | Records click-to-talk audio, sends it to ElevenLabs Scribe, and plays all spoken replies from ElevenLabs. |
 | `server/` | Express backend: Gemini reply + ElevenLabs speech. Holds the API keys. |
-| `src/itinerary.js` | "My First Week" generator. |
+| `src/itinerary.js` | "My First Week": the student's class schedule with the walking leg before each class. |
 | `src/recommendations.js` | Clubs, events, dining, study spots, resources — each with a reason. |
+| `src/profile.js` | Student profile, the demo clock, and schedule lookups. Persisted to `localStorage`. |
+| `src/data/building-images.js` | Photo manifest: file, alt text, author, license and source per building. |
 | `src/i18n.js` | Every string in English, Spanish, Mandarin, Hindi and Korean. |
 | `src/ui.js`, `src/app.css` | Panels, assistant, HUD, onboarding. |
 
 The map is the source of truth for geometry. Campus metadata links to it by `mapObjectId`
 (the OSM element id of a building's largest part, e.g. `relation/1074686`), never by duplicating
 coordinates.
+
+## Building photos
+
+26 buildings have a photo in the info panel, served from `images/buildings/` — nothing is hotlinked.
+Every photo is public domain or a Creative Commons licence, and `src/data/building-images.js`
+carries the author, licence, licence URL and Commons source for each one. The panel renders a
+credit line linking to both the source page and the licence.
+
+Adding one: download the file into `images/buildings/`, add an entry keyed by the **exact map
+building name**, and write alt text describing what the photo shows. Open the image and confirm it
+really is that building before writing alt text — Commons filenames are unreliable, and several
+candidates turned out to be construction sites, distant skylines or the wrong building. A building
+with no verified free photo simply has no photo; that is the intended state, not a gap to fill.
 
 ## Backend (AI features)
 
@@ -66,7 +81,7 @@ In local development the frontend mirrors its own hostname on port 8787 (`localh
 | `POST /api/guide` | `{ message, language, history, buildings, currentLocation, studentContext }` | `{ text, action, audio, speechError }` |
 | `POST /api/speech` | `{ text, language }` | `{ audio (base64 mp3) }` |
 | `POST /api/transcribe?language=en` | Raw browser audio | `{ text }` |
-| `GET /api/health` | — | `{ ok, gemini, speech }` |
+| `GET /api/health` | — | `{ ok, gemini, speech, transcription, allowedOrigins, loopbackAllowed }` |
 
 WHERE THE HOKIE AM I? gives Gemini validated tools for current location, student context, building search,
 nearest-building ranking, and camera fly-to. The server loads the reviewable classification snapshot,
@@ -90,8 +105,9 @@ hokie.itinerary()                       // generated first week
 hokie.route("Pritchard Hall", "McBryde Hall")
 ```
 
-The original map API is unchanged: `flyTo(name, note)`, `overview()`, `listBuildings()`,
-`downloadCampusData()`, `debugBuildings()`, `debugBuilding(name)`.
+The map API lives on `window`: `flyTo(name, note)`, `overview()`, `listBuildings()`,
+`downloadCampusData()`, `debugBuildings()`, `debugBuilding(name)`, plus the diorama and camera
+diagnostics `debugCamera()`, `debugTableFrame()` and `debugMarkerSpots([names])`.
 
 ## Demo script
 
@@ -99,7 +115,8 @@ The original map API is unchanged: `flyTo(name, note)`, `overview()`, `listBuild
    hackathons/gaming/fitness). **Start here** on any building moves the route's origin
    instantly, clears any active route, and waits for a new destination. The selected destination
    keeps the single maroon flag; there is no separate location pointer.
-2. **My Week** fills in with a schedule-aware first week.
+2. **My Week** fills in with the week's classes, each preceded by the walk from where the
+   previous one ends, so it doubles as a "when do I need to leave?" answer.
 3. Ask *"Where is my first CS class?"* → McBryde Hall, with walk time.
 4. **Take me there** → the route draws, the camera eases onto the guide bird, and the bird walks
    the route head-first while the camera keeps it centered (orbit and zoom stay yours).

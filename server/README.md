@@ -71,10 +71,19 @@ but changing the shell default keeps `node`, `npm`, and editor terminals consist
 ### `GET /api/health`
 
 ```json
-{ "ok": true, "gemini": "gemini-3.5-flash-lite", "speech": "eleven_multilingual_v2", "transcription": "scribe_v2" }
+{
+  "ok": true,
+  "gemini": "gemini-3.5-flash-lite",
+  "speech": "eleven_multilingual_v2",
+  "transcription": "scribe_v2",
+  "allowedOrigins": ["http://localhost:8000"],
+  "loopbackAllowed": false
+}
 ```
 
 `gemini` / `speech` / `transcription` are `null` when that provider isn't configured.
+`allowedOrigins` and `loopbackAllowed` echo the CORS setup, which is the quickest way to diagnose
+a `403` from the browser.
 
 ### `POST /api/guide`
 
@@ -147,9 +156,15 @@ open reply.mp3
 
 ## How it works
 
-- `index.js` — Express app: CORS allowlist, JSON body cap, per-IP rate limit, validation, routes.
-- `lib/prompt.js` — WHERE THE HOKIE AM I? persona and rules for language, tool use, camera movement,
-  American campus context, and grounded answers.
+- `index.js` — launcher only: checks the Node version and, if `node` is too old, re-launches
+  `app.js` with a newer installed runtime. It holds no routes.
+- `app.js` — the Express app: CORS allowlist, JSON body cap, per-IP rate limit, validation, routes.
+  This is the process that binds the port, so it is the one to look for in `lsof -ti:8787`.
+- `lib/prompt.js` — the guide's persona and rules for language, tool use, camera movement,
+  American campus context, and grounded answers. It names the guide ("your Hokie guide") and the
+  app ("Where the Hokie Am I?") explicitly so replies never drift onto an older name.
+  `npm start` reads this once at boot — **restart the server after editing it**, or the running
+  process keeps serving the old prompt.
 - `lib/guide-tools.js` — validated current-location, student-context, building search, proximity,
   and fly-to tools backed by the live frontend directory.
 - `data/building-classifications.json` — reviewable, hand-correctable multi-category snapshot.
@@ -157,4 +172,8 @@ open reply.mp3
 - `lib/building-resolver.js` and `lib/building-aliases.js` — resolve Gemini's requested place
   against the exact live directory supplied by the frontend, without a second building list.
 - `lib/gemini.js` — stateless Gemini function-calling loop; only validated `fly_to` calls become actions.
-- `lib/speech.js` — ElevenLabs text-to-speech, returns base64 MP3 or `null` on failure.
+- `lib/buildings.js` — grounding facts read straight from the frontend's `src/data/campus.js`, so
+  the guide can never describe a building differently from the map.
+- `lib/building-classifications.js` — loads and serves the classification snapshot to the tools.
+- `lib/speech.js` — ElevenLabs text-to-speech and Scribe transcription; returns base64 MP3 or
+  `null` on failure, so a speech outage never blocks the text reply.
