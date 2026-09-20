@@ -59,15 +59,15 @@ async function postJSON(path, body) {
  * Ask the Hokie Guide. The server is stateless, so we send the recent turns with each message.
  *
  * POST /api/guide
- *   request:  { message, language, history: [{ role: "user"|"assistant", text }], context }
- *   response: { text, audio (base64 mp3 or null), speechError }
+ *   request:  { message, language, history, context, buildings: [exact map labels] }
+ *   response: { text, action: { type: "flyTo", building } | null, audio, speechError }
  *
- * @returns {Promise<{text: string, audio: string|null}|null>} null when no backend is configured.
+ * @returns {Promise<{text: string, action: object|null, audio: string|null}|null>} null when unavailable.
  */
-export async function askGuide({ message, language = "en", history = [], context = "" }) {
-  const data = await postJSON("/api/guide", { message, language, history, context });
+export async function askGuide({ message, language = "en", history = [], context = "", buildings = [] }) {
+  const data = await postJSON("/api/guide", { message, language, history, context, buildings });
   if (!data?.text) return null;
-  return { text: data.text, audio: data.audio ?? null, speechError: data.speechError ?? null };
+  return { text: data.text, action: data.action ?? null, audio: data.audio ?? null, speechError: data.speechError ?? null };
 }
 
 /** Convert any app text to speech through the server's configured ElevenLabs voice. */

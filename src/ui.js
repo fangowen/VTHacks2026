@@ -3,6 +3,7 @@
 
 import { t, LANGS, getLang, setLang, catLabel, fmtTime, translateDom } from "./i18n.js";
 import { INTERESTS, MAJORS } from "./data/campus.js";
+import { buildingImageFor } from "./data/building-images.js";
 import { residenceHalls, scheduleForMajor } from "./profile.js";
 import { suggestionKeys } from "./ai.js";
 import { voiceState } from "./voice.js";
@@ -235,10 +236,20 @@ export function createUI(ctl) {
     if (!p) return;
     const acc = ctl.places.accessibility(p);
     const walk = ctl.walkEstimate(p);
+    const photo = buildingImageFor(p.name);
+    const photoFigure = photo && el("figure", { class: "hk-place-photo" },
+      el("img", {
+        src: photo.file, alt: photo.alt, loading: "lazy", decoding: "async",
+        referrerpolicy: "no-referrer",
+      }),
+      el("figcaption", {},
+        "Photo: ", el("a", { href: photo.source, target: "_blank", rel: "noopener noreferrer", text: photo.author }),
+        " · ", el("a", { href: photo.licenseUrl, target: "_blank", rel: "noopener noreferrer", text: photo.license })));
     const body = [
       el("div", { class: "hk-badges" },
         el("span", { class: "hk-badge", text: catLabel(p.category) }),
         walk && el("span", { class: "hk-badge alt", text: t("walkFrom", { min: walk.minutes, from: walk.from }) })),
+      photoFigure,
       el("p", { class: "hk-desc", text: ctl.places.description(p) }),
       section("travel",
         el("div", { class: "hk-route-points compact" },

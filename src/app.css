@@ -98,6 +98,14 @@
 .hk-section { margin-top: 14px; }
 .hk-section h3 { font: 700 15px/1.2 var(--stencil); letter-spacing: .03em; color: #6b452c; margin: 0 0 4px; text-transform: uppercase; }
 .hk-desc { font-size: 15px; line-height: 1.45; margin: 0 0 6px; }
+.hk-place-photo {
+  margin: 0 0 12px; overflow: hidden; border: 1px solid rgba(74, 50, 34, .3);
+  border-radius: 10px; background: rgba(74, 50, 34, .08);
+}
+.hk-place-photo img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.hk-place-photo figcaption { padding: 6px 9px; color: #574438; font-size: 11.5px; line-height: 1.35; }
+.hk-place-photo a { color: #6d1736; font-weight: 600; text-underline-offset: 2px; }
+.hk-place-photo a:hover { color: #4d0f26; }
 .hk-ul { margin: 0; padding-left: 18px; font-size: 14px; line-height: 1.5; }
 .hk-note { font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; margin: 8px 0 0; }
 .hk-empty { font-size: 15px; color: var(--ink-soft); }

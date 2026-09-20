@@ -25,10 +25,10 @@ const step = (role, text) => ({
 });
 
 /**
- * @param {{message: string, language?: string, history?: {role: string, text: string}[], context?: string}} req
- * @returns {Promise<string>} the guide's reply text
+ * @param {{message: string, language?: string, history?: {role: string, text: string}[], context?: string, buildings?: string[]}} req
+ * @returns {Promise<{text: string, action: {type: "flyTo"|"none", building: string}}>} structured guide reply
  */
-export async function askGemini({ message, language = "en", history = [], context = "" }) {
+export async function askGemini({ message, language = "en", history = [], context = "", buildings = [] }) {
   const ai = getClient();
   if (!ai) throw Object.assign(new Error("Gemini is not configured on this server"), { status: 503, code: "gemini_unconfigured" });
 
@@ -45,10 +45,31 @@ export async function askGemini({ message, language = "en", history = [], contex
     interaction = await Promise.race([
       ai.interactions.create({
         model: MODEL,
-        system_instruction: buildSystemPrompt({ language, context }),
+        system_instruction: buildSystemPrompt({ language, context, buildings }),
         store: false,                     // stateless: nothing is kept on Google's side
         input,
-        generation_config: { temperature: 0.7, thinking_level: "low" },
+        generation_config: { thinking_level: "low" },
+        response_format: {
+          type: "text",
+          mime_type: "application/json",
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["text", "action"],
+            properties: {
+              text: { type: "string" },
+              action: {
+                type: "object",
+                additionalProperties: false,
+                required: ["type", "building"],
+                properties: {
+                  type: { type: "string", enum: ["flyTo", "none"] },
+                  building: { type: "string" },
+                },
+              },
+            },
+          },
+        },
       }),
       timeout,
     ]);
@@ -68,9 +89,19 @@ export async function askGemini({ message, language = "en", history = [], contex
     clearTimeout(timeoutId);
   }
 
-  const text = (interaction?.output_text ?? "").trim();
-  if (!text) throw Object.assign(new Error("Gemini returned an empty reply"), { status: 502, code: "gemini_empty" });
-  return text;
+  const output = (interaction?.output_text ?? "").trim();
+  if (!output) throw Object.assign(new Error("Gemini returned an empty reply"), { status: 502, code: "gemini_empty" });
+  try {
+    const result = JSON.parse(output);
+    const text = typeof result?.text === "string" ? result.text.trim() : "";
+    const type = result?.action?.type === "flyTo" ? "flyTo" : "none";
+    const building = typeof result?.action?.building === "string" ? result.action.building.trim() : "";
+    if (!text) throw new Error("Structured reply has no text");
+    return { text, action: { type, building } };
+  } catch (err) {
+    console.error(`[gemini] invalid structured response: ${err.message}; output=${output.slice(0, 500)}`);
+    throw Object.assign(new Error("Gemini returned an invalid structured reply"), { status: 502, code: "gemini_invalid" });
+  }
 }
 
 export const geminiModel = () => MODEL;

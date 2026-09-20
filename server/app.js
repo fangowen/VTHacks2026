@@ -5,11 +5,13 @@ import rateLimit from "express-rate-limit";
 
 import { askGemini, geminiConfigured, geminiModel } from "./lib/gemini.js";
 import { speak, transcribe, speechConfigured, speechModel, transcriptionModel } from "./lib/speech.js";
+import { resolveBuilding } from "./lib/building-resolver.js";
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_MESSAGE_CHARS = Number(process.env.MAX_MESSAGE_CHARS || 1000);
 const MAX_HISTORY_TURNS = Number(process.env.MAX_HISTORY_TURNS || 10);
 const MAX_CONTEXT_CHARS = 120;
+const MAX_BUILDINGS = 500;
 
 const app = express();
 app.disable("x-powered-by");
@@ -103,7 +105,32 @@ function parseGuideRequest(body) {
     }));
 
   const context = typeof body.context === "string" ? body.context.trim().slice(0, MAX_CONTEXT_CHARS) : "";
-  return { message, language, history, context };
+  const buildings = [...new Set((Array.isArray(body.buildings) ? body.buildings : [])
+    .filter((name) => typeof name === "string")
+    .map((name) => name.trim().slice(0, MAX_CONTEXT_CHARS))
+    .filter(Boolean)
+    .slice(0, MAX_BUILDINGS))];
+  return { message, language, history, context, buildings };
+}
+
+function locationFailure(language, requested, candidates = null) {
+  const lang = String(language || "en").slice(0, 2).toLowerCase();
+  const choices = candidates?.join(", ");
+  const ambiguous = {
+    en: `I found several close matches. Which one did you mean: ${choices}?`,
+    es: `Encontré varias coincidencias cercanas. ¿Cuál quisiste decir: ${choices}?`,
+    zh: `我找到了几个相近的地点。你指的是哪一个：${choices}？`,
+    hi: `मुझे मिलते-जुलते कई भवन मिले। आपका मतलब इनमें से किससे है: ${choices}?`,
+    ko: `비슷한 건물이 여러 개 있어요. 어느 곳을 말한 건가요: ${choices}?`,
+  };
+  const missing = {
+    en: `I couldn't find “${requested}” in the campus map, so I left the camera where it was.`,
+    es: `No pude encontrar “${requested}” en el mapa del campus, así que dejé la cámara donde estaba.`,
+    zh: `我在校园地图上找不到“${requested}”，所以相机保持在原位。`,
+    hi: `मुझे कैंपस मानचित्र पर “${requested}” नहीं मिला, इसलिए कैमरा वहीं रखा है।`,
+    ko: `캠퍼스 지도에서 “${requested}”을(를) 찾지 못해서 카메라는 그대로 두었어요.`,
+  };
+  return candidates?.length ? (ambiguous[lang] ?? ambiguous.en) : (missing[lang] ?? missing.en);
 }
 
 function parseSpeechRequest(body) {
@@ -117,11 +144,23 @@ function parseSpeechRequest(body) {
 
 app.post("/api/guide", async (req, res, next) => {
   try {
-    const { message, language, history, context } = parseGuideRequest(req.body);
-    const text = await askGemini({ message, language, history, context });
+    const { message, language, history, context, buildings } = parseGuideRequest(req.body);
+    const reply = await askGemini({ message, language, history, context, buildings });
+    let text = reply.text;
+    let action = null;
+    if (reply.action.type === "flyTo") {
+      const resolved = resolveBuilding(reply.action.building, buildings);
+      if (resolved.status === "match") {
+        action = { type: "flyTo", building: resolved.name };
+      } else if (resolved.status === "ambiguous") {
+        text = locationFailure(language, reply.action.building, resolved.candidates);
+      } else {
+        text = locationFailure(language, reply.action.building || message);
+      }
+    }
     const { audio, error: speechError } = await speak(text);   // best effort: text still returns
     if (speechError) console.warn(`[speech] Audio unavailable: ${speechError}`);
-    res.json({ text, audio, speechError });
+    res.json({ text, action, audio, speechError });
   } catch (err) {
     next(err);
   }
@@ -186,6 +225,7 @@ app.use((err, _req, res, _next) => {
     gemini_unconfigured: "The guide isn't configured on the server yet.",
     gemini_timeout: "The guide took too long to answer. Please try again.",
     gemini_empty: "The guide couldn't come up with an answer. Please try again.",
+    gemini_invalid: "The guide returned a response the server couldn't understand. Please try again.",
     gemini_bad_model: `The configured Gemini model (${geminiModel()}) is not available.`,
     gemini_bad_key: "The Gemini API key was rejected by the provider.",
     gemini_failed: "Gemini returned an error. Check the guide server log for details.",

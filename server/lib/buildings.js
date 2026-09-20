@@ -8,14 +8,6 @@ import { PLACES, DINING, STUDY_SPOTS, RESOURCES, CLUBS } from "../../src/data/ca
 
 const norm = (s) => String(s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
 
-/** Every building name the guide is allowed to talk about as a known place. */
-export const knownBuildings = [...new Set([
-  ...PLACES.map((p) => p.mapName),
-  ...DINING.map((d) => d.building),
-  ...STUDY_SPOTS.map((s) => s.building),
-  ...RESOURCES.map((r) => r.building),
-])].filter(Boolean).sort();
-
 /** Find a place by its map name or id, tolerating case and spacing differences. */
 export function findPlace(name) {
   const q = norm(name);

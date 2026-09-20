@@ -86,7 +86,8 @@ but changing the shell default keeps `node`, `npm`, and editor terminals consist
     { "role": "user", "text": "Hi" },
     { "role": "assistant", "text": "Hi! How can I help?" }
   ],
-  "context": "Dietrick Hall"                              // optional: selected building
+  "context": "Dietrick Hall",                             // optional: selected building
+  "buildings": ["Burruss Hall", "Newman Library"]        // exact live map directory
 }
 ```
 
@@ -95,6 +96,7 @@ Response:
 ```jsonc
 {
   "text": "Dietrick Hall is right next door …",  // captions
+  "action": { "type": "flyTo", "building": "Dietrick Hall" },
   "audio": "SUQzBAAAA…",                          // base64 MP3, or null if speech failed
   "speechError": null                             // why audio is null, when it is
 }
@@ -126,6 +128,7 @@ Errors are always JSON: `{ "error": "…" }` with `400` (bad input), `403` (orig
 
 ```bash
 npm run test:guide     # English, Spanish and Chinese, with a building context
+npm run test:buildings # exact, alias, fuzzy, ambiguous and missing-name resolution
 ```
 
 Or with curl:
@@ -163,6 +166,8 @@ open reply.mp3
 - `lib/prompt.js` — the guide's persona: reply in the student's language, keep building names in
   English, explain American campus customs, never give turn-by-turn directions, never invent facts.
 - `lib/buildings.js` — imports the frontend's curated campus data (`src/data/campus.js`) so the
-  guide is grounded in the same building facts the map shows. One source of truth, no copy.
-- `lib/gemini.js` — Interactions API call, stateless (`store: false`), history replayed as steps.
+  guide is grounded in the same building facts the map shows.
+- `lib/building-resolver.js` and `lib/building-aliases.js` — resolve Gemini's requested place
+  against the exact live directory supplied by the frontend, without a second building list.
+- `lib/gemini.js` — stateless Interactions API call with schema-constrained text + map action.
 - `lib/speech.js` — ElevenLabs text-to-speech, returns base64 MP3 or `null` on failure.

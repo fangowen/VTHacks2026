@@ -4,8 +4,9 @@
 // what's on the board. Anything that doesn't match a known intent is sent to our backend
 // (see api.js); if no backend is configured the assistant says what it can do instead.
 //
-// Keyword sets cover all five supported languages, so intent detection works whatever the
-// student types, independent of the UI language.
+// Personal schedule and recommendation questions are answered locally. Building-location
+// requests go to Gemini, which can recognize the student's language and returns a structured
+// map action resolved by the server against the complete live building directory.
 
 import { t, fmtTime, fmtDuration, joinList, dayName, getLang } from "./i18n.js";
 import { nextClass, firstClassOfDept, firstClassOn, classNearTime, gapAfter } from "./profile.js";
@@ -18,8 +19,6 @@ const has = (s, re) => re.test(s);
 
 // Words that mean "walk me there", in every supported language
 const GO = /take me|walk me|bring me|navigate|directions|how do i get|get to|lead me|show me the way|llévame|llevame|vamos|ir a|cómo llego|como llego|带我|怎么走|怎么去|去往|ले चलो|ले चलिए|कैसे जाऊ|पहुँच|데려|안내|가는 길|가자|가고 싶/i;
-const WHERE = /where is|where's|wheres|where can i find|locate|find me|dónde|donde|在哪|哪里|位置|कहाँ|कहां|어디/i;
-const ABOUT = /what is|what's|tell me about|info|about the|qué es|que es|介绍|是什么|关于|क्या है|बताओ|जानकारी|알려|어떤 곳|뭐야/i;
 
 const INTENTS = {
   home: /take me home|go home|my dorm|my (residence )?hall|back home|a casa|mi residencia|回宿舍|回家|宿舍|घर ले|छात्रावास|기숙사|집으로/i,
@@ -36,36 +35,6 @@ const INTENTS = {
   greet: /^(hi|hello|hey|yo|help|hola|buenas|你好|您好|नमस्ते|हेलो|안녕|도움말)\b/i,
 };
 
-// Common nicknames → featured place ids (all five languages)
-const ALIASES = [
-  [/library|biblioteca|图书馆|पुस्तकालय|도서관/i, "newman"],
-  [/gym|rec center|recreation|gimnasio|健身房|健身中心|जिम|व्यायामशाला|체육관|헬스장/i, "mccomas"],
-  [/student center|student union|centro estudiantil|学生中心|学生会馆|छात्र केंद्र|학생회관|학생 센터/i, "squires"],
-  [/stadium|estadio|体育场|球场|स्टेडियम|경기장/i, "lane-stadium"],
-  [/drillfield|drill field|explanada|大草坪|मैदान|드릴필드/i, "drillfield"],
-  [/bridge|puente|廊桥|天桥|पुल|다리|구름다리/i, "torgersen-bridge"],
-  [/dining hall|comedor|食堂|餐厅|डाइनिंग|식당/i, "dietrick"],
-];
-
-function findPlace(text, ctx) {
-  const q = norm(text);
-  for (const [re, id] of ALIASES) {
-    if (re.test(q)) { const p = ctx.places.byId(id); if (p) return p; }
-  }
-  // Longest map name mentioned anywhere in the message wins ("take me to newman library please")
-  let best = null;
-  for (const p of ctx.places.all()) {
-    const n = norm(p.name);
-    if (n.length >= 4 && q.includes(n) && (!best || n.length > norm(best.name).length)) best = p;
-  }
-  if (best) return best;
-  // Otherwise strip the command words and try a fuzzy lookup
-  const stripped = q.replace(GO, " ").replace(WHERE, " ").replace(ABOUT, " ")
-    .replace(/\b(to|the|a|at|in|please|me|is|el|la|los|las|de|por favor|가|을|를|에|로|의|में|पर|का|की)\b/g, " ")
-    .replace(/[?？。.!！,，]/g, " ").trim();
-  return stripped.length >= 3 ? ctx.places.find(stripped) : null;
-}
-
 const nav = (place) => ({ type: "navigate", placeId: place.id });
 const focus = (place) => ({ type: "focus", placeId: place.id });
 
@@ -78,11 +47,10 @@ function walkLine(ctx, to, from = ctx.here) {
 export async function handleMessage(message, ctx) {
   const msg = norm(message);
   if (!msg) return null;
-  const place = findPlace(message, ctx);
   const wantsGo = has(msg, GO) || has(msg, INTENTS.there);
 
-  // "Take me there" with no place named
-  if (has(msg, INTENTS.there) && !place) {
+  // "Take me there" refers to the last suggestion; named destinations are handled by Gemini.
+  if (has(msg, INTENTS.there)) {
     const target = ctx.lastSuggested ?? ctx.selected;
     if (!target) return { text: t("a_takeWhere") };
     return goTo(ctx, target);
@@ -109,17 +77,11 @@ export async function handleMessage(message, ctx) {
 
   if (has(msg, INTENTS.eat)) return eatReply(ctx, msg, wantsGo);
 
-  if (has(msg, INTENTS.study)) return studyReply(ctx, msg, place, wantsGo);
+  if (has(msg, INTENTS.study)) return studyReply(ctx, msg, null, wantsGo);
 
   if (has(msg, INTENTS.tonight)) return tonightReply(ctx);
 
   if (has(msg, INTENTS.clubs)) return clubsReply(ctx);
-
-  if (place) {
-    if (wantsGo) return goTo(ctx, place);
-    if (has(msg, ABOUT)) return { text: t("a_about", { place: place.name, desc: ctx.places.description(place) }), action: focus(place), suggest: place };
-    return whereReply(ctx, place);
-  }
 
   if (has(msg, INTENTS.greet)) {
     return { text: ctx.profile.name ? t("a_hello", { name: ctx.profile.name }) : t("a_helloAnon") };
@@ -133,8 +95,17 @@ export async function handleMessage(message, ctx) {
         language: getLang(),
         history: ctx.history ?? [],
         context: ctx.selected?.name ?? "",
+        buildings: ctx.places.all().filter((place) => place.kind === "building").map((place) => place.name),
       });
-      if (out?.text) return { text: out.text, audio: out.audio };
+      if (out?.text) {
+        const target = out.action?.type === "flyTo" ? ctx.places.byName(out.action.building) : null;
+        return {
+          text: out.text,
+          audio: out.audio,
+          action: target ? focus(target) : null,
+          suggest: target ?? null,
+        };
+      }
     } catch (err) {
       console.warn("Guide backend unavailable:", err);
       return { text: err.message || t("a_backendError"), isError: true };
@@ -151,23 +122,6 @@ function goText(ctx, place) {
 }
 function goTo(ctx, place) {
   return { text: goText(ctx, place), action: nav(place), suggest: place };
-}
-
-function whereReply(ctx, place) {
-  const from = ctx.here;
-  if (!from) return { text: t("a_about", { place: place.name, desc: ctx.places.description(place) }), action: focus(place), suggest: place };
-  const { min, dist } = walkLine(ctx, place);
-  const dir = t(compassBetween(from, place));
-  return {
-    text: `${t("a_whereIs", { place: place.name, dist, dir, from: from.name, min })} ${t("a_offer")}`,
-    action: focus(place), suggest: place,
-  };
-}
-
-function compassBetween(a, b) {
-  const keys = ["n", "ne", "e", "se", "s", "sw", "w", "nw"];
-  const ang = Math.atan2(b.x - a.x, b.y - a.y);
-  return keys[(Math.round(ang / (Math.PI / 4)) + 8) % 8];
 }
 
 function classReply(ctx, cls, day, wantsGo, key = "a_nextClass") {

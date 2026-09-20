@@ -30,7 +30,7 @@ next to `index.html`.
 | `src/data/campus.js` | Building info, dining, clubs, events, resources, majors and schedules. |
 | `src/routing.js` | Walking graph from the map's OSM paths, A\*, step-free routing. |
 | `src/navigation.js` | Route ribbon, walking guide marker, follow camera, pause/resume/skip/recenter. |
-| `src/ai.js` | Intent engine: understands map and schedule questions in all five languages. |
+| `src/ai.js` | Local schedule/recommendation intents plus Gemini's structured building actions. |
 | `src/api.js` | Client for our backend (`POST /api/guide` and `POST /api/speech`). Uses the page hostname on port 8787, with an optional `window.HOKIE_GUIDE_API_URL` override. |
 | `src/voice.js` | Records click-to-talk audio, sends it to ElevenLabs Scribe, and plays all spoken replies from ElevenLabs. |
 | `server/` | Express backend: Gemini reply + ElevenLabs speech. Holds the API keys. |
@@ -63,15 +63,15 @@ In local development the frontend mirrors its own hostname on port 8787 (`localh
 
 | Endpoint | Request | Response |
 | --- | --- | --- |
-| `POST /api/guide` | `{ message, language, history, context }` | `{ text, audio (base64 mp3 or null), speechError }` |
+| `POST /api/guide` | `{ message, language, history, context, buildings }` | `{ text, action, audio, speechError }` |
 | `POST /api/speech` | `{ text, language }` | `{ audio (base64 mp3) }` |
 | `POST /api/transcribe?language=en` | Raw browser audio | `{ text }` |
 | `GET /api/health` | — | `{ ok, gemini, speech }` |
 
-Questions about buildings, schedules, dining, study spots, clubs and events are answered
-locally by the intent engine. When one of those answers is spoken, only its text is sent to the
-ElevenLabs speech endpoint; open-ended questions use Gemini and ElevenLabs together. If the
-backend is down or unconfigured, captions and the rest of the map keep working.
+Schedule, dining, study, club and event recommendations can be answered locally. Building-location
+requests use Gemini's multilingual structured action, which the server resolves against the exact
+directory sent by the live map before the frontend flies to it. Spoken replies go through
+ElevenLabs. If the backend is down or unconfigured, captions and the rest of the map keep working.
 
 ## Console API
 

@@ -67,6 +67,9 @@ const COLORS = {
   road: 0xb9b0a0, path: 0xf6f1e6, water: 0x8db4c6,
   wall: 0xd4cab8, roof: 0xf0eadf, maroon: 0x861f41, orange: 0xe5751f,
 };
+const ROOM = Object.freeze({ width: 13200, depth: 12600, floorY: -850, wallHeight: 7400 });
+const ROOM_MARGIN = 170;
+const TABLE_FABRIC_COLOR = "#6f1738"; // One-place edit for the skirt (VT maroon: #861f41).
 
 // ---------- Projection (lat/lon -> local meters; +x east, -z north) ----------
 const M_LAT = 110540, M_LON = 111320 * Math.cos(CENTER.lat * Math.PI / 180);
@@ -85,17 +88,17 @@ document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(COLORS.room);
-scene.fog = new THREE.Fog(COLORS.room, 7600, 12500);
+scene.fog = new THREE.Fog(COLORS.room, 11500, 19500);
 
-// Narrow FOV + far camera = flatter perspective, which reads as "looking at a model"
-const camera = new THREE.PerspectiveCamera(22, innerWidth / innerHeight, 10, 30000);
+// The usual narrow FOV reads like a scale model. Only the last part of the restored zoom-out
+// range widens gradually so the larger room walls and their decor fit in view from low angles.
+const BASE_FOV = 22, ROOM_FOV = 40;
+const camera = new THREE.PerspectiveCamera(BASE_FOV, innerWidth / innerHeight, 10, 30000);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.075;
 controls.zoomSpeed = 0.85;
 controls.maxPolarAngle = Math.PI * 0.42;
-// Keep the camera close enough to read the diorama, but never so close that roofs clip or so
-// far away that the campus becomes a postage stamp. These limits apply to wheel, pinch, and UI.
 controls.minDistance = 360;
 controls.maxDistance = 7200;
 controls.autoRotate = !matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -103,7 +106,8 @@ controls.autoRotateSpeed = 0.35;
 const HOME = { target: new THREE.Vector3(0, 0, 0), dist: 5500, polar: 0.95, az: -0.6 };
 placeCamera(HOME.target, HOME.dist, HOME.polar, HOME.az);
 
-scene.add(new THREE.HemisphereLight(0xfff4e0, 0x5a4a3a, 1.1));
+scene.add(new THREE.HemisphereLight(0xfff4e0, 0x5a4a3a, 1.28));
+scene.add(new THREE.AmbientLight(0xffe9cf, 0.22));
 const sun = new THREE.DirectionalLight(0xffe6c4, 2.4);
 sun.position.set(-1500, 2300, 1150);
 sun.castShadow = true;
@@ -177,7 +181,7 @@ function fittedText(ctx, text, maxWidth, startSize, family = "Impact, sans-serif
   do { ctx.font = `800 ${size}px ${family}`; size -= 2; } while (size > 18 && ctx.measureText(text).width > maxWidth);
   return size + 2;
 }
-function wallFrame(x, y, w, h, texture, { z = -3150, frame = trimWood } = {}) {
+function wallFrame(x, y, w, h, texture, { z = -ROOM.depth / 2 + 100, frame = trimWood } = {}) {
   roomBox(w + 54, h + 54, 34, frame, x, y, z, { cast: true, receive: false });
   const art = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: texture, roughness: 0.72, transparent: true }));
   art.position.set(x, y, z + 19); art.castShadow = false; scene.add(art); return art;
@@ -217,7 +221,8 @@ function pennantTexture(text, base, accent) {
 }
 
 function buildWarRoom() {
-  const FLOOR_Y = -850, ROOM_W = 7200, ROOM_D = 6500, WALL_H = 4300, CEILING_Y = FLOOR_Y + WALL_H;
+  const FLOOR_Y = ROOM.floorY, ROOM_W = ROOM.width, ROOM_D = ROOM.depth;
+  const WALL_H = ROOM.wallHeight, CEILING_Y = FLOOR_Y + WALL_H;
   const sideWallFrame = (side, z, y, w, h, texture) => {
     const frameX = side * (ROOM_W / 2 - 18);
     roomBox(34, h + 54, w + 54, trimWood, frameX, y, z, { cast: true, receive: false });
@@ -227,7 +232,7 @@ function buildWarRoom() {
   };
 
   // Floor and a restrained game-room rug establish the table's contact plane.
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), floorWood);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, ROOM_D), floorWood);
   floor.rotation.x = -Math.PI / 2; floor.position.y = FLOOR_Y; floor.receiveShadow = true; scene.add(floor);
   const rug = new THREE.Mesh(new THREE.PlaneGeometry(2850, 2850), new THREE.MeshStandardMaterial({ color: 0x5c1831, roughness: 1 }));
   rug.rotation.x = -Math.PI / 2; rug.position.y = FLOOR_Y + 3; rug.receiveShadow = true; scene.add(rug);
@@ -236,8 +241,8 @@ function buildWarRoom() {
     new THREE.LineBasicMaterial({ color: 0xe5751f, transparent: true, opacity: 0.82 }));
   rugInset.position.y = FLOOR_Y + 7; scene.add(rugInset);
 
-  // Single-sided planes form a complete-looking room from inside but do not trap the orbit camera
-  // if a user zooms beyond a wall.
+  // Single-sided planes form a complete-looking room; the shared camera safety envelope below
+  // gently keeps both manual and automated camera movement inside them.
   const plaster = new THREE.MeshStandardMaterial({ color: 0xb7aa94, roughness: 0.96, side: THREE.FrontSide });
   const wainscot = new THREE.MeshStandardMaterial({ color: 0x3c2920, roughness: 0.85, side: THREE.FrontSide });
   const backWall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, WALL_H), plaster);
@@ -259,48 +264,43 @@ function buildWarRoom() {
   const ceilingMat = new THREE.MeshStandardMaterial({ color: 0xd8cebb, roughness: 0.94, side: THREE.FrontSide });
   const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, ROOM_D), ceilingMat);
   ceiling.rotation.x = Math.PI / 2; ceiling.position.y = CEILING_Y; ceiling.receiveShadow = true; scene.add(ceiling);
-  for (const x of [-2400, 0, 2400]) roomBox(90, 110, ROOM_D, trimWood, x, CEILING_Y - 55, 0);
-  for (const z of [-2200, 0, 2200]) roomBox(ROOM_W, 110, 90, trimWood, 0, CEILING_Y - 55, z);
+  for (const x of [-4400, 0, 4400]) roomBox(90, 110, ROOM_D, trimWood, x, CEILING_Y - 55, 0);
+  for (const z of [-4200, 0, 4200]) roomBox(ROOM_W, 110, 90, trimWood, 0, CEILING_Y - 55, z);
 
   // Warm ceiling fixtures and a soft table wash make the room feel occupied rather than staged.
   const lightTarget = new THREE.Object3D(); lightTarget.position.set(0, -80, 0); scene.add(lightTarget);
-  for (const [x, z] of [[-1550, -500], [0, 250], [1550, -500]]) {
+  for (const [x, z] of [[-3900, -1200], [0, 650], [3900, -1200]]) {
     roomBox(210, 34, 210, trimWood, x, CEILING_Y - 125, z);
     const glow = new THREE.Mesh(new THREE.CircleGeometry(72, 24), new THREE.MeshStandardMaterial({ color: 0xffd49a, emissive: 0xffb45e, emissiveIntensity: 1.8 }));
     glow.rotation.x = Math.PI / 2; glow.position.set(x, CEILING_Y - 144, z); scene.add(glow);
-    const spot = new THREE.SpotLight(0xffc77d, 550, 5600, Math.PI * .28, .65, 1.1);
+    const spot = new THREE.SpotLight(0xffc77d, 840, 12500, Math.PI * .31, .72, 1.05);
     spot.position.set(x, CEILING_Y - 170, z); spot.target = lightTarget; scene.add(spot);
   }
 
   // Intentional wall layout: a large central identity sign, two jerseys, two flags, pennants,
   // and a few smaller photos. The gaps keep the wall collegiate without turning it into a collage.
-  wallFrame(0, 1120, 1280, 560, signTexture("HOKIE WAR ROOM", "STRATEGY • TRADITION • TEAM"));
-  wallFrame(-1500, 1080, 520, 650, jerseyTexture("25", "VIRGINIA TECH"));
-  wallFrame(1500, 1080, 520, 650, jerseyTexture("7", "HOKIES", "#e5751f", "#861f41"));
-  wallFrame(-2550, 1540, 520, 820, signTexture("VT", "EST. 1872", "#861f41", "#e5751f"));
-  wallFrame(2550, 1540, 520, 820, signTexture("HOKIES", "GAME DAY", "#e5751f", "#861f41"));
-  wallFrame(-700, 690, 700, 260, pennantTexture("GO HOKIES", "#861f41", "#e5751f"));
-  wallFrame(700, 690, 700, 260, pennantTexture("LET'S GO VT", "#e5751f", "#861f41"));
-  wallFrame(-2350, 650, 500, 310, signTexture("LANE", "SATURDAY NIGHTS", "#3b2a22", "#e5751f"));
-  wallFrame(2350, 650, 500, 310, signTexture("ENTER", "SANDMAN", "#3b2a22", "#e5751f"));
-  sideWallFrame(1, -900, 1450, 980, 460, signTexture("HOKIE COUNTRY", "ORANGE • MAROON • LOYALTY"));
-  sideWallFrame(1, 650, 880, 620, 360, signTexture("HOME FIELD", "BLACKSBURG, VA", "#3b2a22", "#e5751f"));
-  sideWallFrame(-1, -650, 1250, 900, 440, signTexture("VIRGINIA TECH", "UT PROSIM", "#861f41", "#e5751f"));
+  wallFrame(0, 2100, 1280, 560, signTexture("HOKIE WAR ROOM", "STRATEGY • TRADITION • TEAM"));
+  wallFrame(-2800, 2050, 520, 650, jerseyTexture("25", "VIRGINIA TECH"));
+  wallFrame(2800, 2050, 520, 650, jerseyTexture("7", "HOKIES", "#e5751f", "#861f41"));
+  wallFrame(-4650, 2860, 520, 820, signTexture("VT", "EST. 1872", "#861f41", "#e5751f"));
+  wallFrame(4650, 2860, 520, 820, signTexture("HOKIES", "GAME DAY", "#e5751f", "#861f41"));
+  wallFrame(-1300, 1250, 700, 260, pennantTexture("GO HOKIES", "#861f41", "#e5751f"));
+  wallFrame(1300, 1250, 700, 260, pennantTexture("LET'S GO VT", "#e5751f", "#861f41"));
+  wallFrame(-4300, 1180, 500, 310, signTexture("LANE", "SATURDAY NIGHTS", "#3b2a22", "#e5751f"));
+  wallFrame(4300, 1180, 500, 310, signTexture("ENTER", "SANDMAN", "#3b2a22", "#e5751f"));
+  sideWallFrame(1, -2100, 2650, 980, 460, signTexture("HOKIE COUNTRY", "ORANGE • MAROON • LOYALTY"));
+  sideWallFrame(1, 1600, 1600, 620, 360, signTexture("HOME FIELD", "BLACKSBURG, VA", "#3b2a22", "#e5751f"));
+  sideWallFrame(-1, -1500, 2300, 900, 440, signTexture("VIRGINIA TECH", "UT PROSIM", "#861f41", "#e5751f"));
 
-  // Low cabinets and side benches establish believable surrounding furniture while keeping the
-  // table clear as the hero object.
+  // A low back-wall cabinet adds context without surrounding the table with seating.
   roomBox(1700, 520, 360, darkWood, 0, FLOOR_Y + 260, -ROOM_D / 2 + 230);
   for (const x of [-510, 0, 510]) roomBox(12, 430, 370, brassMat, x, FLOOR_Y + 260, -ROOM_D / 2 + 220, { cast: false });
-  for (const x of [-2050, 2050]) {
-    roomBox(720, 95, 350, darkWood, x, FLOOR_Y + 480, 350);
-    for (const z of [230, 470]) roomBox(80, 450, 80, trimWood, x, FLOOR_Y + 225, z);
-  }
 }
 
 buildWarRoom();
 
 // The campus surface is still the interaction plane; it is now the inset top of a real table.
-const BOARD_T = 60;
+const BOARD_T = 90;
 const board = new THREE.Mesh(
   new THREE.BoxGeometry(HALF * 2 + 40, BOARD_T, HALF * 2 + 40),
   [ // +x, -x, +y (top), -y, +z, -z
@@ -311,9 +311,47 @@ board.position.y = -BOARD_T / 2;
 board.castShadow = board.receiveShadow = true;
 scene.add(board);
 
-// Aprons, four weighty legs, and broad feet make the tabletop visibly meet the floor.
-for (const z of [-925, 925]) roomBox(1850, 170, 92, darkWood, 0, -145, z);
-for (const x of [-925, 925]) roomBox(92, 170, 1850, darkWood, x, -145, 0);
+// Oversized rails form a substantial frame around (not over) the unchanged 2 km map area.
+for (const z of [-1085, 1085]) roomBox(2260, 205, 170, darkWood, 0, -135, z);
+for (const x of [-1085, 1085]) roomBox(170, 205, 1920, darkWood, x, -135, 0);
+
+function fabricTexture(base) {
+  const canvas = document.createElement("canvas"); canvas.width = 256; canvas.height = 256;
+  const ctx = canvas.getContext("2d"); ctx.fillStyle = base; ctx.fillRect(0, 0, 256, 256);
+  const gradient = ctx.createLinearGradient(0, 0, 256, 0);
+  for (let x = 0; x <= 1; x += .0625) {
+    const shade = Math.round(22 * Math.sin(x * Math.PI * 16));
+    gradient.addColorStop(Math.min(1, x), `rgba(${shade > 0 ? 255 : 0},${shade > 0 ? 255 : 0},${shade > 0 ? 255 : 0},${Math.abs(shade) / 190})`);
+  }
+  ctx.fillStyle = gradient; ctx.fillRect(0, 0, 256, 256);
+  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping; texture.repeat.set(5, 1); return texture;
+}
+const fabricMat = new THREE.MeshStandardMaterial({
+  map: fabricTexture(TABLE_FABRIC_COLOR), color: 0xffffff, roughness: .98, metalness: 0,
+  side: THREE.DoubleSide,
+});
+function fabricSkirt(width, height, x, y, z, rotationY = 0) {
+  const geometry = new THREE.PlaneGeometry(width, height, 48, 8);
+  const pos = geometry.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const px = pos.getX(i), py = pos.getY(i);
+    const fold = Math.sin(px * .035) * 13 + Math.sin(px * .081 + py * .01) * 4;
+    pos.setZ(i, fold);
+  }
+  geometry.computeVertexNormals();
+  const skirt = new THREE.Mesh(geometry, fabricMat);
+  skirt.position.set(x, y, z); skirt.rotation.y = rotationY;
+  skirt.castShadow = skirt.receiveShadow = true; scene.add(skirt); return skirt;
+}
+// The skirt starts below the wooden rail so it reads as attached cloth and sits clear of the wood.
+const SKIRT_H = 475, SKIRT_Y = -215 - SKIRT_H / 2;
+fabricSkirt(2060, SKIRT_H, 0, SKIRT_Y, 1178);
+fabricSkirt(2060, SKIRT_H, 0, SKIRT_Y, -1178, Math.PI);
+fabricSkirt(2060, SKIRT_H, 1178, SKIRT_Y, 0, -Math.PI / 2);
+fabricSkirt(2060, SKIRT_H, -1178, SKIRT_Y, 0, Math.PI / 2);
+
+// Four weighty legs and broad feet visibly meet the floor beneath the skirt.
 for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
   const x = sx * 850, z = sz * 850;
   const leg = roomBox(172, 650, 172, darkWood, x, -515, z);
@@ -908,14 +946,79 @@ const smoothZoom = {
 };
 const touchPointers = new Set();
 const cameraDistance = () => camera.position.distanceTo(controls.target);
+const roomMin = new THREE.Vector3(
+  -ROOM.width / 2 + ROOM_MARGIN,
+  ROOM.floorY + ROOM_MARGIN,
+  -ROOM.depth / 2 + ROOM_MARGIN,
+);
+const roomMax = new THREE.Vector3(
+  ROOM.width / 2 - ROOM_MARGIN,
+  ROOM.floorY + ROOM.wallHeight - ROOM_MARGIN,
+  ROOM.depth / 2 - ROOM_MARGIN,
+);
+const ROOM_SOFT_ZONE = 620;
+
+// Resistance begins before the wall, floor, or ceiling. The final clamp is only a safety net for
+// a very large gesture/frame jump, so ordinary orbiting eases away from the room shell instead of
+// striking an invisible hard stop. This runs after every manual or automated camera update.
+function softenAxis(value, min, max, dt) {
+  if (value <= min) return min;
+  if (value >= max) return max;
+  const low = min + ROOM_SOFT_ZONE, high = max - ROOM_SOFT_ZONE;
+  if (value < low) {
+    const proximity = 1 - (value - min) / ROOM_SOFT_ZONE;
+    return THREE.MathUtils.damp(value, low, 2.2 + 8 * proximity * proximity, dt);
+  }
+  if (value > high) {
+    const proximity = 1 - (max - value) / ROOM_SOFT_ZONE;
+    return THREE.MathUtils.damp(value, high, 2.2 + 8 * proximity * proximity, dt);
+  }
+  return value;
+}
+function softenVector(vector, dt) {
+  vector.set(
+    softenAxis(vector.x, roomMin.x, roomMax.x, dt),
+    softenAxis(vector.y, roomMin.y, roomMax.y, dt),
+    softenAxis(vector.z, roomMin.z, roomMax.z, dt),
+  );
+}
+function keepCameraInsideRoom(dt) {
+  const oldTarget = controls.target.clone();
+  softenVector(controls.target, dt);
+  camera.position.add(controls.target.clone().sub(oldTarget)); // preserve orbit while target yields
+  softenVector(camera.position, dt);
+  controls.target.clamp(roomMin, roomMax);
+  camera.position.clamp(roomMin, roomMax);
+  smoothZoom.target = THREE.MathUtils.clamp(smoothZoom.target, controls.minDistance, controls.maxDistance);
+}
+function updateRoomFov(dt) {
+  const progress = THREE.MathUtils.smoothstep(cameraDistance(), HOME.dist, controls.maxDistance);
+  const desired = THREE.MathUtils.lerp(BASE_FOV, ROOM_FOV, progress);
+  const next = THREE.MathUtils.damp(camera.fov, desired, 7, dt);
+  if (Math.abs(next - camera.fov) > .001) {
+    camera.fov = next;
+    camera.updateProjectionMatrix();
+  }
+}
 function publishCameraState() {
+  const insideRoom = [camera.position, controls.target].every((point) =>
+    point.x >= roomMin.x && point.x <= roomMax.x
+    && point.y >= roomMin.y && point.y <= roomMax.y
+    && point.z >= roomMin.z && point.z <= roomMax.z);
   document.documentElement.dataset.cameraState = JSON.stringify({
     distance: +cameraDistance().toFixed(2),
     targetDistance: +smoothZoom.target.toFixed(2),
     zoomEasing: smoothZoom.active,
     panEasing: !!panTween,
     targetX: +controls.target.x.toFixed(2),
+    targetY: +controls.target.y.toFixed(2),
     targetZ: +controls.target.z.toFixed(2),
+    positionX: +camera.position.x.toFixed(2),
+    positionY: +camera.position.y.toFixed(2),
+    positionZ: +camera.position.z.toFixed(2),
+    minDistance: controls.minDistance,
+    maxDistance: controls.maxDistance,
+    insideRoom,
   });
 }
 function setCameraDistance(distance) {
@@ -1161,6 +1264,7 @@ function namedBuildings() { return buildings; } // every building is named, and 
 // ---------- Loop ----------
 const clock = new THREE.Clock();
 const frameHooks = new Set(); // extra per-frame work registered by the app (route walker, etc.)
+let cameraDebugAt = 0;
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.1), t = clock.elapsedTime;
   updateHover();
@@ -1184,6 +1288,9 @@ renderer.setAnimationLoop(() => {
     flag.userData.cloth.rotation.y = Math.sin(t * 3) * 0.25;
   }
   controls.update();
+  keepCameraInsideRoom(dt);
+  updateRoomFov(dt);
+  if (performance.now() - cameraDebugAt > 250) { publishCameraState(); cameraDebugAt = performance.now(); }
   composer.render();
 });
 
