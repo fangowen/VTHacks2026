@@ -109,29 +109,8 @@ The map API lives on `window`: `flyTo(name, note)`, `overview()`, `listBuildings
 `downloadCampusData()`, `debugBuildings()`, `debugBuilding(name)`, plus the diorama and camera
 diagnostics `debugCamera()`, `debugTableFrame()` and `debugMarkerSpots([names])`.
 
-## Demo script
-
-1. Open the page → onboarding appears → **Use demo profile** (CS major, Pritchard Hall,
-   hackathons/gaming/fitness). **Start here** on any building moves the route's origin
-   instantly, clears any active route, and waits for a new destination. The selected destination
-   keeps the single maroon flag; there is no separate location pointer.
-2. **My Week** fills in with the week's classes, each preceded by the walk from where the
-   previous one ends, so it doubles as a "when do I need to leave?" answer.
-3. Ask *"Where is my first CS class?"* → McBryde Hall, with walk time.
-4. **Take me there** → the route draws, the camera eases onto the guide bird, and the bird walks
-   the route head-first while the camera keeps it centered (orbit and zoom stay yours).
-   The **Speed** slider (0.5×–3×) changes pace mid-trip, and **Bird's-eye view** pulls out to
-   frame the whole route while the bird keeps walking.
-5. On arrival the building panel opens and the guide notices the gap before the next class and
-   suggests Newman Library.
-6. *"Take me there"* → it walks you to the library.
-7. Switch the language to 中文 or Español and repeat — replies and building descriptions
-   all change.
-8. Turn on ♿ step-free routing and walk somewhere with stairs — the route changes and the guide
-   explains the difference.
 
 ## Data caveat
 
 Descriptions, hours, clubs, events and accessibility details are prototype data written for the
-demo. Building names, footprints and walking paths come from OpenStreetMap. Verify anything
-student-facing against Virginia Tech's official sources before real use.
+demo. Building names, footprints and walking paths come from OpenStreetMap.
